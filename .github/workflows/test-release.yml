@@ -36,6 +36,8 @@ jobs:
           npm version $version --no-git-tag-version
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Build application
+        run: npm run build
       - name: Build and publish test release
         run: npx electron-builder --win nsis --publish always
         env:
