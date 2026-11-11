@@ -39,7 +39,7 @@ jobs:
         run: |
           gh release download runtime-assets --repo ColinsBlares/launcher --pattern mint-runtime.zip --dir .
           if (!(Test-Path "mint-runtime.zip")) { throw "mint-runtime.zip was not downloaded from the runtime-assets release" }
-          Expand-Archive -Path "mint-runtime.zip" -DestinationPath "mint-runtime" -Force
+          Expand-Archive -Path "mint-runtime.zip" -DestinationPath "." -Force
           if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "MiNT runtime archive must contain client/Launcher.exe" }
 
       - name: Install dependencies
