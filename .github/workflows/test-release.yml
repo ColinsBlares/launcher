@@ -1,0 +1,42 @@
+name: Test Remember RP update
+on:
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: "Test version (must be higher than installed version)"
+        required: true
+        default: "0.1.2"
+permissions:
+  contents: write
+concurrency:
+  group: remember-rp-test-release
+  cancel-in-progress: false
+jobs:
+  test-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download MiNT runtime
+        shell: pwsh
+        run: |
+          gh release download runtime-assets --repo ColinsBlares/launcher --pattern mint-runtime.zip --dir .
+          if (!(Test-Path "mint-runtime.zip")) { throw "mint-runtime.zip missing from runtime-assets" }
+          Expand-Archive -Path "mint-runtime.zip" -DestinationPath "mint-runtime" -Force
+          if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "Runtime archive must contain client/Launcher.exe" }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set test version
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.test_version }}"
+          if ($version -notmatch '^0\.1\.\d+$') { throw "Use a test version like 0.1.2" }
+          npm version $version --no-git-tag-version
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build and publish test release
+        run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
