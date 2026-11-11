@@ -47,6 +47,8 @@ function publishUpdateState(next: Record<string, unknown>) {
 
 function configureAutoUpdater() {
   autoUpdater.autoDownload = false;
+  // NSIS: force a full installer download. This avoids stale/cross-release blockmap deltas.
+  autoUpdater.disableDifferentialDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
   autoUpdater.on("checking-for-update", () => publishUpdateState({ status: "checking", message: "Проверяем наличие обновлений..." }));
