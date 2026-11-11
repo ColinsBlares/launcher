@@ -1,0 +1,70 @@
+{
+  "name": "remember-rp-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remember RP official GTA V roleplay launcher",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "npm run build && electron-builder --win nsis",
+    "release": "npm run build && electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  },
+  "build": {
+    "appId": "ru.rememberrp.launcher",
+    "productName": "Remember RP",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "extraResources": [
+      {
+        "from": "mint-runtime",
+        "to": "mint-runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "YOUR_GITHUB_USERNAME",
+        "repo": "remember-rp-launcher",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
