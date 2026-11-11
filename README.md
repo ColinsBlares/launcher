@@ -130,3 +130,25 @@ MiNT может отвечать `BUSY: Wait for the current operation to finish
 - GitHub repo: `remember-rp-launcher`
 - Проверка релизов: отключена до создания репозитория
 - UI в настройках: включён, показывает состояние заглушки
+
+
+## Публикация обновлений через GitHub Releases
+
+Автообновление использует `electron-updater`. Для каждой версии `electron-builder` должен опубликовать установщик, `latest.yml` и `.blockmap` в GitHub Release репозитория `ColinsBlares/launcher`. Не загружай `latest.yml` вручную и не переименовывай установщик.
+
+### Первый релиз и следующие версии
+
+1. Из-за лимита GitHub в 100 MB на отдельный файл runtime нельзя хранить обычными файлами в Git. Создай на GitHub отдельный Release с тегом `runtime-assets`, отметь его как **Pre-release** и прикрепи asset `mint-runtime.zip`. Внутри архива должна быть папка `client`, а в ней `Launcher.exe`, DLL и все ресурсы MiNT. Этот pre-release не будет выбран как последняя стабильная версия лаунчера.
+2. Измени `version` в `package.json` на следующий номер (сейчас проект подготовлен к `0.1.1`).
+3. Закоммить и отправь изменения в `main`.
+4. Создай и отправь тег, совпадающий с версией: `git tag v0.1.1` и `git push origin v0.1.1`.
+5. GitHub Actions скачает `mint-runtime.zip` из pre-release `runtime-assets`, распакует его и проверит наличие `client/Launcher.exe`. Затем выполнит Windows-сборку и опубликует Release с установщиком и автоматически сгенерированным `latest.yml`.
+6. Проверь страницу https://github.com/ColinsBlares/launcher/releases и убедись, что в Assets есть `.exe`, `latest.yml` и `.blockmap`.
+
+### Обязательные настройки GitHub
+
+В Settings → Actions → General → Workflow permissions должно быть разрешено `Read and write permissions`, если настройки репозитория не наследуют права workflow. Workflow также объявляет `contents: write`.
+
+### Проверка обновления
+
+Установленная версия лаунчера вызывает `autoUpdater.checkForUpdates()`. Если опубликована версия новее текущей, появляется кнопка скачивания; после загрузки — кнопка перезапуска и установки. В режиме разработки проверка отключена. Первый установщик нужно собрать и установить отдельно; автообновление работает только после установки приложения.

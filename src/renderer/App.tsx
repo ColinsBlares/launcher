@@ -166,11 +166,9 @@ export default function App() {
     catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Ошибка проверки обновлений." }); }
     finally { setUpdateBusy(false); }
   }
-  async function downloadUpdate() {
-    setUpdateBusy(true);
-    try { await window.launcher.downloadUpdate(); }
-    catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Ошибка загрузки обновления." }); }
-    finally { setUpdateBusy(false); }
+  async function openUpdateRelease() {
+    try { await window.launcher.openUpdateRelease(updateInfo.releaseUrl); }
+    catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Не удалось открыть страницу релиза." }); }
   }
 
   async function saveSettings() {
@@ -331,11 +329,11 @@ export default function App() {
         <p className="updater-message">{updateInfo.message || "Проверка обновлений через GitHub Releases."}</p>
         {updateInfo.status === "downloading" && <div className="updater-progress"><div style={{ width: `${Math.max(0, Math.min(100, updateInfo.percent || 0))}%` }}/></div>}
         <div className="updater-actions">
-          {updateInfo.status === "available" ? <button className="primary-small" onClick={downloadUpdate} disabled={updateBusy}><Download size={13}/> Скачать {updateInfo.version}</button> : null}
+          {updateInfo.status === "available" ? <button className="primary-small" onClick={async () => { setUpdateBusy(true); try { await window.launcher.downloadUpdate(); } catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Не удалось загрузить обновление." }); } finally { setUpdateBusy(false); } }} disabled={updateBusy}><Download size={13}/> Скачать {updateInfo.version}</button> : null}
           {updateInfo.status === "downloaded" ? <button className="primary-small" onClick={() => window.launcher.installUpdate()}><CheckCircle2 size={13}/> Перезапустить и установить</button> : null}
           <button className="secondary-small" onClick={checkUpdates} disabled={updateBusy || updateInfo.status === "downloading"}>{updateBusy || updateInfo.status === "checking" ? "Проверяем..." : "Проверить обновления"}</button>
         </div>
-        <small className="updater-footnote">Источник обновлений: GitHub Releases. Подключение репозитория будет настроено позже.</small>
+        <small className="updater-footnote">Источник обновлений: GitHub Releases · ColinsBlares/launcher.</small>
       </div>
       <label className="field-label">ПУТЬ К GTA V</label>
       <div className="game-path-row">

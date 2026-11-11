@@ -3,6 +3,7 @@ interface Window {
   launcher: {
     getUpdateStatus(): Promise<any>;
     checkForUpdates(): Promise<any>;
+    openUpdateRelease(url?: string): Promise<boolean>;
     downloadUpdate(): Promise<any>;
     installUpdate(): Promise<boolean>;
     getSettings(): Promise<any>;

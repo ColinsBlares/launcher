@@ -1,8 +1,8 @@
 node_modules/
 out/
 release/
-mint-runtime/
+dist/
+*.log
+.DS_Store
 
-.env
-.env.*
-!.env.example
+mint-runtime/

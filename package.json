@@ -1,6 +1,6 @@
 {
   "name": "remember-rp-launcher",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Remember RP official GTA V roleplay launcher",
   "main": "out/main/index.js",
@@ -58,13 +58,13 @@
         ]
       }
     ],
-  "publish": [
-    {
-      "provider": "github",
-      "owner": "ColinsBlares",
-      "repo": "launcher",
-      "releaseType": "release"
-    }
-  ]
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ColinsBlares",
+        "repo": "launcher",
+        "releaseType": "release"
+      }
+    ]
   }
 }

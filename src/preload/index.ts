@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
   getUpdateStatus: () => ipcRenderer.invoke("updater:get-status"),
   checkForUpdates: () => ipcRenderer.invoke("updater:check"),
+  openUpdateRelease: (url?: string) => ipcRenderer.invoke("updater:open-release", url),
   downloadUpdate: () => ipcRenderer.invoke("updater:download"),
   installUpdate: () => ipcRenderer.invoke("updater:install"),
   getSettings: () => ipcRenderer.invoke("app:get-settings"),

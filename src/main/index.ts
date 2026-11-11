@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, net } from "electron";
 import { join, dirname } from "node:path";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -27,16 +27,17 @@ let launchInProgress = false;
 let launchPendingUntil = 0;
 let settings: Settings = { ...defaults };
 
-// GitHub update source placeholder. Replace owner and repo when the repository is created.
+// GitHub Releases used by electron-updater. The repository must publish installer assets and latest.yml.
 const UPDATE_SOURCE = {
-  enabled: false,
-  owner: "YOUR_GITHUB_USERNAME",
-  repo: "remember-rp-launcher"
+  enabled: true,
+  owner: "ColinsBlares",
+  repo: "launcher"
 };
+let updateCheckInProgress = false;
 let updateState: Record<string, unknown> = {
-  status: "not-configured",
+  status: "idle",
   currentVersion: app.getVersion(),
-  message: "GitHub-репозиторий ещё не подключён. Автообновления пока отключены."
+  message: "Готов к проверке обновлений на GitHub Releases."
 };
 
 function publishUpdateState(next: Record<string, unknown>) {
@@ -59,14 +60,12 @@ function configureAutoUpdater() {
     publishUpdateState({ status: "development", message: "Проверка обновлений доступна только в установленной версии." });
     return;
   }
-  if (!UPDATE_SOURCE.enabled || UPDATE_SOURCE.owner === "YOUR_GITHUB_USERNAME") {
-    publishUpdateState({ status: "not-configured", message: "GitHub-репозиторий ещё не подключён. Автообновления пока отключены." });
+  if (!UPDATE_SOURCE.enabled) {
+    publishUpdateState({ status: "not-configured", message: "Автообновления отключены в настройках лаунчера." });
     return;
   }
-  // Check silently after startup; the user can also trigger a manual check in Settings.
-  setTimeout(() => autoUpdater.checkForUpdates().catch((error: Error) => {
-    publishUpdateState({ status: "error", message: error.message });
-  }), 5000);
+  // Manual checks use GitHub's Releases API below. Do not start electron-updater
+  // network work during startup: a slow update server must never affect the UI.
 }
 
 function findSiblingMintLauncher() {
@@ -265,10 +264,41 @@ app.whenReady().then(() => {
 
   ipcMain.handle("updater:get-status", () => updateState);
   ipcMain.handle("updater:check", async () => {
-    if (!app.isPackaged) return publishUpdateState({ status: "development", message: "Проверка обновлений доступна только в установленной версии." });
-    if (!UPDATE_SOURCE.enabled || UPDATE_SOURCE.owner === "YOUR_GITHUB_USERNAME") return publishUpdateState({ status: "not-configured", message: "GitHub-репозиторий ещё не подключён. Автообновления пока отключены." });
-    try { await autoUpdater.checkForUpdates(); return updateState; }
-    catch (error) { publishUpdateState({ status: "error", message: (error as Error).message }); return updateState; }
+    if (!app.isPackaged) {
+      return publishUpdateState({ status: "development", message: "Проверка обновлений доступна только в установленной версии лаунчера." });
+    }
+    if (!UPDATE_SOURCE.enabled) {
+      return publishUpdateState({ status: "not-configured", message: "Источник обновлений не настроен." });
+    }
+    if (updateCheckInProgress) return updateState;
+
+    updateCheckInProgress = true;
+    publishUpdateState({ status: "checking", message: "Проверяем GitHub Releases..." });
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error("Превышено время ожидания ответа GitHub (30 секунд).")), 30000);
+      });
+      const result = await Promise.race([autoUpdater.checkForUpdates(), timeout]);
+      if (!result) return publishUpdateState({ status: "error", message: "GitHub не вернул информацию об обновлении." });
+      // electron-updater emits update-available / update-not-available and updates the UI state.
+      return updateState;
+    } catch (error) {
+      const raw = (error as Error)?.message || "Неизвестная ошибка";
+      const message = /latest\.yml|404/i.test(raw)
+        ? "В последнем GitHub Release нет latest.yml. Опубликуй релиз через GitHub Actions из этого проекта."
+        : raw;
+      return publishUpdateState({ status: "error", message: `Не удалось проверить обновления: ${message}` });
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      updateCheckInProgress = false;
+    }
+  });
+  ipcMain.handle("updater:open-release", async (_event, url?: string) => {
+    const safeUrl = typeof url === "string" && /^https:\/\/github\.com\/[^\s]+$/i.test(url)
+      ? url : `https://github.com/${UPDATE_SOURCE.owner}/${UPDATE_SOURCE.repo}/releases/latest`;
+    await shell.openExternal(safeUrl);
+    return true;
   });
   ipcMain.handle("updater:download", async () => {
     if (updateState.status !== "available") return updateState;
