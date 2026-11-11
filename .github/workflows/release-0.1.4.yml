@@ -1,0 +1,92 @@
+name: Publish Remember RP 0.1.4
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/release-0.1.4.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remember-rp-release-v0.1.4
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download and unpack MiNT runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download runtime-assets --repo ColinsBlares/launcher --pattern mint-runtime.zip --dir .
+          if (!(Test-Path "mint-runtime.zip")) { throw "mint-runtime.zip was not downloaded" }
+          Expand-Archive -Path "mint-runtime.zip" -DestinationPath "." -Force
+          if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "MiNT Launcher.exe is missing from mint-runtime/client" }
+
+      - name: Check version and set 0.1.4
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view v0.1.4 --repo ColinsBlares/launcher *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release v0.1.4 already exists; refusing to overwrite it." }
+          $global:LASTEXITCODE = 0
+          npm version 0.1.4 --no-git-tag-version
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build NSIS installer
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Verify installer and SHA512 before publishing
+        shell: pwsh
+        run: |
+          $installer = "release/Remember-RP-0.1.4-Setup.exe"
+          $manifest = "release/latest.yml"
+          $blockmap = "$installer.blockmap"
+          foreach ($file in @($installer, $manifest, $blockmap)) {
+            if (!(Test-Path $file)) { throw "Required file is missing: $file" }
+          }
+          $script = @'
+          const fs = require("fs");
+          const crypto = require("crypto");
+          const installer = process.argv[1];
+          const manifestPath = process.argv[2];
+          const manifest = fs.readFileSync(manifestPath, "utf8");
+          const match = manifest.match(/^sha512:\s*(\S+)/m) || manifest.match(/^\s+sha512:\s*(\S+)/m);
+          if (!match) throw new Error("latest.yml does not contain a SHA512 checksum");
+          const actual = crypto.createHash("sha512").update(fs.readFileSync(installer)).digest("base64");
+          if (actual !== match[1]) throw new Error("SHA512 mismatch: installer differs from latest.yml");
+          console.log("SHA512 verified successfully");
+          '@
+          node -e $script $installer $manifest
+          if ($LASTEXITCODE -ne 0) { throw "SHA512 verification failed; release was not published." }
+
+      - name: Publish immutable release v0.1.4
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v0.1.4 `
+            "release/Remember-RP-0.1.4-Setup.exe" `
+            "release/Remember-RP-0.1.4-Setup.exe.blockmap" `
+            "release/latest.yml" `
+            --repo ColinsBlares/launcher `
+            --title "Remember RP 0.1.4" `
+            --notes "Заставка запуска отображается не менее 1,6 секунды. Исправлена схема автообновления; полная загрузка NSIS установщика и проверка SHA512."
