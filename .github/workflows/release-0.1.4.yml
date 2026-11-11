@@ -57,7 +57,7 @@ jobs:
       - name: Verify installer and SHA512 before publishing
         shell: pwsh
         run: |
-          $installer = "release/Remember-RP-0.1.4-Setup.exe"
+          $installer = "release/Remember RP-0.1.4-Setup.exe"
           $manifest = "release/latest.yml"
           $blockmap = "$installer.blockmap"
           foreach ($file in @($installer, $manifest, $blockmap)) {
@@ -84,8 +84,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create v0.1.4 `
-            "release/Remember-RP-0.1.4-Setup.exe" `
-            "release/Remember-RP-0.1.4-Setup.exe.blockmap" `
+            "release/Remember RP-0.1.4-Setup.exe" `
+            "release/Remember RP-0.1.4-Setup.exe.blockmap" `
             "release/latest.yml" `
             --repo ColinsBlares/launcher `
             --title "Remember RP 0.1.4" `
