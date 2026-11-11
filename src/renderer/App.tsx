@@ -26,6 +26,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState(true);
+  const bootStartedAt = useRef(Date.now());
   const [detectingGame, setDetectingGame] = useState(false);
   const [gameDetectMessage, setGameDetectMessage] = useState("");
   const [activeTab, setActiveTab] = useState("Главная");
@@ -56,6 +57,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const finishBoot = async () => {
+      // Keep the cinematic intro visible for at least 1.6 seconds, even when
+      // settings and MiNT initialization complete almost instantly.
+      const remaining = Math.max(0, 1600 - (Date.now() - bootStartedAt.current));
+      if (remaining > 0) {
+        await new Promise(resolve => window.setTimeout(resolve, remaining));
+      }
+      if (active) setIsBooting(false);
+    };
+
     window.launcher.getSettings().then(async s => {
       const loaded = { ...s, serverAddress: s.serverAddress || "127.0.0.1:22005" };
       if (!loaded.gameDirectory) {
@@ -82,9 +94,12 @@ export default function App() {
       } catch (e) {
         pushError(e);
       } finally {
-        setIsBooting(false);
+        await finishBoot();
       }
-    }).catch(e => { pushError(e); setIsBooting(false); });
+    }).catch(async e => {
+      pushError(e);
+      await finishBoot();
+    });
     const offState = window.launcher.on("mint:state", (data) => {
       setConnected(data.state === "ready");
       setMintStatus((old: any) => ({ ...old, running: data.state === "ready" }));
@@ -102,7 +117,10 @@ export default function App() {
     const offTrust = window.launcher.on("mint:trust-required", setTrust);
     const offLog = window.launcher.on("mint:log", (line) => addLog("Журнал клиента", String(line)));
     const offClose = window.launcher.on("app:close-requested", () => setShowExitConfirm(true));
-    return () => { offState(); offEvent(); offTrust(); offLog(); offClose(); };
+    return () => {
+      active = false;
+      offState(); offEvent(); offTrust(); offLog(); offClose();
+    };
   }, []);
 
   const pushError = (e: any) => {
