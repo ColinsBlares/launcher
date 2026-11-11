@@ -1,0 +1,99 @@
+name: Publish Remember RP 0.1.5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/release-0.1.5.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remember-rp-release-v0.1.5
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download and unpack MiNT runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download runtime-assets --repo ColinsBlares/launcher --pattern mint-runtime.zip --dir .
+          if (!(Test-Path "mint-runtime.zip")) { throw "mint-runtime.zip was not downloaded" }
+          Expand-Archive -Path "mint-runtime.zip" -DestinationPath "." -Force
+          if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "MiNT Launcher.exe is missing from mint-runtime/client" }
+
+      - name: Set version 0.1.5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view v0.1.5 --repo ColinsBlares/launcher *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release v0.1.5 already exists; refusing to overwrite it." }
+          $global:LASTEXITCODE = 0
+          npm version 0.1.5 --no-git-tag-version
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build URL-safe NSIS installer
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Verify installer name, manifest path, and SHA512
+        shell: pwsh
+        run: |
+          $installer = "release/Remember-RP-0.1.5-Setup.exe"
+          $manifest = "release/latest.yml"
+          $blockmap = "$installer.blockmap"
+          foreach ($file in @($installer, $manifest, $blockmap)) {
+            if (!(Test-Path $file)) { throw "Required file is missing: $file" }
+          }
+          $script = @'
+          const fs = require("fs");
+          const crypto = require("crypto");
+          const path = require("path");
+          const installer = process.argv[1];
+          const manifestPath = process.argv[2];
+          const manifest = fs.readFileSync(manifestPath, "utf8");
+          const expectedName = path.basename(installer);
+          const pathMatch = manifest.match(/^path:\s*(.+)$/m);
+          const urlMatch = manifest.match(/^\s{2}- url:\s*(.+)$/m);
+          const declared = (pathMatch?.[1] || urlMatch?.[1] || "").trim().replace(/^["']|["']$/g, "");
+          if (!declared) throw new Error("latest.yml does not declare the installer path");
+          if (declared !== expectedName) throw new Error("Manifest path mismatch: " + declared + " != " + expectedName);
+          const shaMatch = manifest.match(/^sha512:\s*(\S+)/m) || manifest.match(/^\s{4}sha512:\s*(\S+)/m);
+          if (!shaMatch) throw new Error("latest.yml does not contain SHA512");
+          const actual = crypto.createHash("sha512").update(fs.readFileSync(installer)).digest("base64");
+          if (actual !== shaMatch[1]) throw new Error("SHA512 mismatch between installer and latest.yml");
+          console.log("Installer filename and SHA512 verified: " + expectedName);
+          '@
+          node -e $script $installer $manifest
+          if ($LASTEXITCODE -ne 0) { throw "Manifest verification failed; release was not published." }
+
+      - name: Publish immutable release v0.1.5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v0.1.5 `
+            "release/Remember-RP-0.1.5-Setup.exe" `
+            "release/Remember-RP-0.1.5-Setup.exe.blockmap" `
+            "release/latest.yml" `
+            --repo ColinsBlares/launcher `
+            --title "Remember RP 0.1.5" `
+            --notes "Исправлено имя установщика для GitHub Releases: URL-safe filename совпадает с latest.yml. Полная загрузка NSIS и проверка SHA512 до публикации."
