@@ -75,7 +75,7 @@ jobs:
             const installer = process.argv[1];
             const manifestPath = process.argv[2];
             const manifest = fs.readFileSync(manifestPath, "utf8");
-            const match = manifest.match(/^\\s{4}sha512:\\s*(\\S+)/m);
+            const match = manifest.match(/^\s{4}sha512:\s*(\S+)/m);
             if (!match) throw new Error("Could not find file sha512 in latest.yml");
             const actual = crypto.createHash("sha512").update(fs.readFileSync(installer)).digest("base64");
             if (actual !== match[1]) throw new Error("SHA512 mismatch between installer and latest.yml");
