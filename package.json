@@ -42,7 +42,7 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "${productName}-${version}-Setup.${ext}"
+      "artifactName": "Remember-RP-${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
