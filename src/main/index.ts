@@ -163,6 +163,8 @@ let discordReconnectTimer: NodeJS.Timeout | null = null;
 let discordPresenceTimer: NodeJS.Timeout | null = null;
 let discordGameState: boolean | null = null;
 let rememberRpLaunchActive = false;
+let rememberRpLaunchRequestedAt = 0;
+let activeDiscordClientId = "";
 let discordActivityStartedAt = Math.floor(Date.now() / 1000);
 let discordState: { connected: boolean; message: string } = {
   connected: false,
@@ -185,8 +187,9 @@ function discordFrame(opcode: number, payload: unknown) {
 function sendDiscordActivity() {
   if (!discordRpcSocket || !discordRpcReady) return;
   const processRunning = isGameRunning();
-  const playing = rememberRpLaunchActive && processRunning;
-  if (rememberRpLaunchActive && !processRunning) rememberRpLaunchActive = false;
+  const waitingForGameStart = rememberRpLaunchActive && !processRunning && Date.now() - rememberRpLaunchRequestedAt < 90_000;
+  const playing = rememberRpLaunchActive && (processRunning || waitingForGameStart);
+  if (rememberRpLaunchActive && !processRunning && !waitingForGameStart) rememberRpLaunchActive = false;
   if (discordGameState !== playing) {
     discordGameState = playing;
     discordActivityStartedAt = Math.floor(Date.now() / 1000);
@@ -239,6 +242,7 @@ async function connectDiscordRpc() {
       if (!connected) continue;
 
       discordRpcSocket = socket;
+      activeDiscordClientId = clientId;
       discordRpcReady = false;
       let buffer = Buffer.alloc(0);
       socket.on("data", (chunk: Buffer) => {
@@ -303,6 +307,7 @@ function configureDiscordPresence() {
     const socket = discordRpcSocket;
     discordRpcSocket = null;
     discordRpcReady = false;
+    activeDiscordClientId = "";
     socket?.end();
     publishDiscordState(false, "Discord Rich Presence отключён.");
     return;
@@ -596,6 +601,7 @@ app.whenReady().then(() => {
       const result = await getBridge().request("launch", args);
       // Rich Presence is shown only for a game launch initiated from this launcher.
       rememberRpLaunchActive = true;
+      rememberRpLaunchRequestedAt = Date.now();
       // Keep a short guard after MiNT accepts the command while GTA is starting up.
       launchPendingUntil = Date.now() + 45_000;
       return result;
