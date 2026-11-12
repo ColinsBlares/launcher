@@ -37,24 +37,6 @@ jobs:
           if ($packageVersion -notmatch '^\d+\.\d+\.\d+$') {
             throw "Version must use MAJOR.MINOR.PATCH format."
           }
-          "RELEASE_VERSION=$packageVersion" >> $env:GITHUB_ENV
-
-      - name: Create release tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $tag = "v$env:RELEASE_VERSION"
-          gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag" --jq ".object.sha" 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) {
-            $existingSha = (gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag" --jq ".object.sha").Trim()
-            if ($existingSha -ne "$env:GITHUB_SHA") {
-              throw "Tag $tag already exists and points to a different commit: $existingSha"
-            }
-            Write-Host "Tag $tag already points to this commit."
-          } else {
-            gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$env:GITHUB_SHA"
-          }
 
       - name: Download MiNT runtime package
         env:
