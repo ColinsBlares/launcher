@@ -5,6 +5,9 @@ interface Window {
     checkForUpdates(): Promise<any>;
     openUpdateRelease(url?: string): Promise<boolean>;
     downloadUpdate(): Promise<any>;
+    cancelUpdateDownload(): Promise<any>;
+    getDiscordStatus(): Promise<any>;
+    openDiscordLink(kind: "community" | "support"): Promise<boolean>;
     installUpdate(): Promise<boolean>;
     getSettings(): Promise<any>;
     detectGameDirectory(): Promise<string>;

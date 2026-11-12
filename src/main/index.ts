@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell, net } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { createConnection, type Socket } from "node:net";
+import { randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -11,13 +13,21 @@ type Settings = {
   gameDirectory: string;
   serverAddress: string;
   playerName: string;
+  discordInviteUrl: string;
+  discordSupportUrl: string;
+  discordClientId: string;
+  discordPresenceEnabled: boolean;
 };
 
 const defaults: Settings = {
   mintPath: "D:\\MiNT\\Launcher.exe",
   gameDirectory: "",
   serverAddress: "127.0.0.1:22005",
-  playerName: "Player"
+  playerName: "Player",
+  discordInviteUrl: "",
+  discordSupportUrl: "",
+  discordClientId: "",
+  discordPresenceEnabled: false
 };
 
 let mainWindow: BrowserWindow | null = null;
@@ -34,6 +44,8 @@ const UPDATE_SOURCE = {
   repo: "launcher"
 };
 let updateCheckInProgress = false;
+let updateDownloadInProgress = false;
+let updateCancellationToken: { cancel: () => void } | null = null;
 let updateState: Record<string, unknown> = {
   status: "idle",
   currentVersion: app.getVersion(),
@@ -47,8 +59,9 @@ function publishUpdateState(next: Record<string, unknown>) {
 
 function configureAutoUpdater() {
   autoUpdater.autoDownload = false;
-  // NSIS: force a full installer download. This avoids stale/cross-release blockmap deltas.
-  autoUpdater.disableDifferentialDownload = true;
+  // NSIS blockmaps are published for versioned installer names. electron-updater
+  // downloads only changed byte ranges and falls back to a full installer if a delta fails.
+  autoUpdater.disableDifferentialDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
   autoUpdater.on("checking-for-update", () => publishUpdateState({ status: "checking", message: "Проверяем наличие обновлений..." }));
@@ -56,7 +69,11 @@ function configureAutoUpdater() {
   autoUpdater.on("update-not-available", (info: UpdateInfo) => publishUpdateState({ status: "up-to-date", version: info.version, message: "Установлена последняя версия Remember RP." }));
   autoUpdater.on("download-progress", (progress: ProgressInfo) => publishUpdateState({ status: "downloading", percent: Math.round(progress.percent), transferred: progress.transferred, total: progress.total, bytesPerSecond: progress.bytesPerSecond, message: "Загружаем обновление..." }));
   autoUpdater.on("update-downloaded", (info: UpdateInfo) => publishUpdateState({ status: "downloaded", version: info.version, percent: 100, message: `Версия ${info.version} готова к установке.` }));
-  autoUpdater.on("error", (error: Error) => publishUpdateState({ status: "error", message: `Не удалось обновиться: ${error.message}` }));
+  autoUpdater.on("update-cancelled", (info: UpdateInfo) => publishUpdateState({ status: "cancelled", version: info.version, message: "Загрузка обновления остановлена. Её можно запустить повторно." }));
+  autoUpdater.on("error", (error: Error) => {
+    if (updateState.status === "cancelled") return;
+    publishUpdateState({ status: "error", message: `Не удалось обновиться: ${error.message}` });
+  });
 
   if (!app.isPackaged) {
     publishUpdateState({ status: "development", message: "Проверка обновлений доступна только в установленной версии." });
@@ -105,16 +122,225 @@ function loadSettings() {
     } catch (e) { console.error("Cannot save detected MiNT path:", e); }
   }
 }
+function normalizeDiscordUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || !["discord.gg", "discord.com", "www.discord.com"].includes(host)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function saveSettings(next: Partial<Settings>) {
-  settings = { ...settings, ...next };
+  settings = {
+    ...settings,
+    ...next,
+    discordInviteUrl: normalizeDiscordUrl(next.discordInviteUrl ?? settings.discordInviteUrl),
+    discordSupportUrl: normalizeDiscordUrl(next.discordSupportUrl ?? settings.discordSupportUrl),
+    discordClientId: String(next.discordClientId ?? settings.discordClientId ?? "").trim(),
+    discordPresenceEnabled: Boolean(next.discordPresenceEnabled ?? settings.discordPresenceEnabled)
+  };
   mkdirSync(app.getPath("userData"), { recursive: true });
   writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), "utf8");
+  configureDiscordPresence();
   return settings;
 }
 function emit(channel: string, payload: unknown) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
 
+
+type DiscordRpcPayload = { cmd?: string; evt?: string; data?: any };
+
+let discordRpcSocket: Socket | null = null;
+let discordRpcReady = false;
+let discordConnectInProgress = false;
+let discordShouldConnect = false;
+let discordReconnectTimer: NodeJS.Timeout | null = null;
+let discordPresenceTimer: NodeJS.Timeout | null = null;
+let discordGameState: boolean | null = null;
+let rememberRpLaunchActive = false;
+let rememberRpLaunchRequestedAt = 0;
+let activeDiscordClientId = "";
+let discordActivityStartedAt = Math.floor(Date.now() / 1000);
+let discordState: { connected: boolean; message: string } = {
+  connected: false,
+  message: "Discord Rich Presence отключён."
+};
+
+function publishDiscordState(connected: boolean, message: string) {
+  discordState = { connected, message };
+  emit("discord:status", discordState);
+}
+
+function discordFrame(opcode: number, payload: unknown) {
+  const body = Buffer.from(JSON.stringify(payload), "utf8");
+  const header = Buffer.alloc(8);
+  header.writeInt32LE(opcode, 0);
+  header.writeInt32LE(body.length, 4);
+  return Buffer.concat([header, body]);
+}
+
+function sendDiscordActivity() {
+  if (!discordRpcSocket || !discordRpcReady) return;
+  const processRunning = isGameRunning();
+  const waitingForGameStart = rememberRpLaunchActive && !processRunning && Date.now() - rememberRpLaunchRequestedAt < 90_000;
+  const playing = rememberRpLaunchActive && (processRunning || waitingForGameStart);
+  if (rememberRpLaunchActive && !processRunning && !waitingForGameStart) rememberRpLaunchActive = false;
+  if (discordGameState !== playing) {
+    discordGameState = playing;
+    discordActivityStartedAt = Math.floor(Date.now() / 1000);
+  }
+  const activity = {
+    type: 0,
+    details: playing ? "Играет на сервере Remember RP" : "В лаунчере Remember RP",
+    state: playing ? "GTA V Roleplay" : "Готовится к игре",
+    timestamps: { start: discordActivityStartedAt }
+  };
+  const payload = {
+    cmd: "SET_ACTIVITY",
+    args: { pid: process.pid, activity },
+    nonce: randomUUID()
+  };
+  discordRpcSocket.write(discordFrame(1, payload));
+}
+
+async function connectDiscordRpc() {
+  if (!discordShouldConnect || discordRpcSocket || discordConnectInProgress) return;
+  const clientId = String(settings.discordClientId || "").trim();
+  if (!/^\d{17,20}$/.test(clientId)) {
+    publishDiscordState(false, "Укажи Application ID Discord в настройках.");
+    return;
+  }
+
+  discordConnectInProgress = true;
+  try {
+    for (let index = 0; index < 10; index += 1) {
+      const pipe = "\\\\?\\pipe\\discord-ipc-" + index;
+      const socket = createConnection(pipe);
+      const connected = await new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => {
+          socket.destroy();
+          resolve(false);
+        }, 1200);
+        const onConnect = () => {
+          clearTimeout(timeout);
+          socket.off("error", onError);
+          resolve(true);
+        };
+        const onError = () => {
+          clearTimeout(timeout);
+          socket.off("connect", onConnect);
+          resolve(false);
+        };
+        socket.once("connect", onConnect);
+        socket.once("error", onError);
+      });
+      if (!connected) continue;
+
+      discordRpcSocket = socket;
+      activeDiscordClientId = clientId;
+      discordRpcReady = false;
+      let buffer = Buffer.alloc(0);
+      socket.on("data", (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk]);
+        while (buffer.length >= 8) {
+          const opcode = buffer.readInt32LE(0);
+          const length = buffer.readInt32LE(4);
+          if (length < 0 || length > 1024 * 1024) {
+            socket.destroy(new Error("Invalid Discord RPC frame."));
+            return;
+          }
+          if (buffer.length < 8 + length) break;
+          const body = buffer.subarray(8, 8 + length);
+          buffer = buffer.subarray(8 + length);
+          if (opcode !== 1) continue;
+          try {
+            const message = JSON.parse(body.toString("utf8")) as DiscordRpcPayload;
+            if (message.evt === "READY" && socket === discordRpcSocket) {
+              discordRpcReady = true;
+              publishDiscordState(true, "Discord подключён · Rich Presence активен");
+              sendDiscordActivity();
+            } else if (message.evt === "ERROR") {
+              publishDiscordState(false, message.data?.message || "Discord отклонил Rich Presence.");
+            }
+          } catch {
+            // Ignore non-JSON RPC frames.
+          }
+        }
+      });
+      socket.on("error", () => {
+        if (socket === discordRpcSocket) publishDiscordState(false, "Соединение с Discord прервано.");
+      });
+      socket.on("close", () => {
+        if (socket !== discordRpcSocket) return;
+        discordRpcSocket = null;
+        discordRpcReady = false;
+        publishDiscordState(false, "Ожидаем подключение Discord...");
+        if (discordShouldConnect && !discordReconnectTimer) {
+          discordReconnectTimer = setTimeout(() => {
+            discordReconnectTimer = null;
+            void connectDiscordRpc();
+          }, 15000);
+        }
+      });
+      socket.write(discordFrame(0, { v: 1, client_id: clientId }));
+      publishDiscordState(false, "Подключаемся к Discord...");
+      return;
+    }
+    publishDiscordState(false, "Discord не запущен. Открой Discord и повтори попытку.");
+  } finally {
+    discordConnectInProgress = false;
+  }
+}
+
+function configureDiscordPresence() {
+  const enabled = Boolean(settings.discordPresenceEnabled);
+  const clientId = String(settings.discordClientId || "").trim();
+  if (!enabled) {
+    discordShouldConnect = false;
+    if (discordReconnectTimer) clearTimeout(discordReconnectTimer);
+    discordReconnectTimer = null;
+    const socket = discordRpcSocket;
+    discordRpcSocket = null;
+    discordRpcReady = false;
+    activeDiscordClientId = "";
+    socket?.end();
+    publishDiscordState(false, "Discord Rich Presence отключён.");
+    return;
+  }
+  if (!/^\d{17,20}$/.test(clientId)) {
+    discordShouldConnect = false;
+    const previous = discordRpcSocket;
+    discordRpcSocket = null;
+    discordRpcReady = false;
+    activeDiscordClientId = "";
+    previous?.end();
+    publishDiscordState(false, "Укажи Application ID Discord в настройках.");
+    return;
+  }
+  if (activeDiscordClientId && activeDiscordClientId !== clientId) {
+    const previous = discordRpcSocket;
+    discordRpcSocket = null;
+    discordRpcReady = false;
+    activeDiscordClientId = "";
+    previous?.end();
+  }
+  discordShouldConnect = true;
+  void connectDiscordRpc();
+}
+
+function startDiscordPresencePolling() {
+  if (discordPresenceTimer) clearInterval(discordPresenceTimer);
+  discordPresenceTimer = setInterval(() => {
+    if (!discordShouldConnect) return;
+    if (discordRpcSocket && discordRpcReady) sendDiscordActivity();
+    else void connectDiscordRpc();
+  }, 5000);
+}
 
 function isGameRunning() {
   if (process.platform !== "win32") return false;
@@ -263,6 +489,8 @@ app.whenReady().then(() => {
   loadSettings();
   createWindow();
   configureAutoUpdater();
+  configureDiscordPresence();
+  startDiscordPresencePolling();
 
   ipcMain.handle("updater:get-status", () => updateState);
   ipcMain.handle("updater:check", async () => {
@@ -283,6 +511,7 @@ app.whenReady().then(() => {
       });
       const result = await Promise.race([autoUpdater.checkForUpdates(), timeout]);
       if (!result) return publishUpdateState({ status: "error", message: "GitHub не вернул информацию об обновлении." });
+      updateCancellationToken = result.cancellationToken || null;
       // electron-updater emits update-available / update-not-available and updates the UI state.
       return updateState;
     } catch (error) {
@@ -303,12 +532,44 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.handle("updater:download", async () => {
-    if (updateState.status !== "available") return updateState;
-    try { await autoUpdater.downloadUpdate(); return updateState; }
-    catch (error) { publishUpdateState({ status: "error", message: (error as Error).message }); return updateState; }
+    if (updateState.status !== "available" || updateDownloadInProgress) return updateState;
+    if (!updateCancellationToken) {
+      const check = await autoUpdater.checkForUpdates();
+      updateCancellationToken = check?.cancellationToken || null;
+    }
+    if (!updateCancellationToken) return updateState;
+    updateDownloadInProgress = true;
+    try {
+      await autoUpdater.downloadUpdate(updateCancellationToken as any);
+      return updateState;
+    } catch (error) {
+      if ((updateState.status as string) !== "cancelled") {
+        publishUpdateState({ status: "error", message: (error as Error).message });
+      }
+      return updateState;
+    } finally {
+      updateDownloadInProgress = false;
+      updateCancellationToken = null;
+    }
+  });
+  ipcMain.handle("updater:cancel-download", () => {
+    if (updateDownloadInProgress && updateCancellationToken) {
+      updateCancellationToken.cancel();
+      publishUpdateState({ status: "cancelled", message: "Загрузка остановлена. Для продолжения запусти её повторно." });
+    }
+    return updateState;
   });
   ipcMain.handle("updater:install", () => {
     if (updateState.status === "downloaded") autoUpdater.quitAndInstall(false, true);
+    return true;
+  });
+
+  ipcMain.handle("discord:get-status", () => discordState);
+  ipcMain.handle("discord:open-link", async (_event, kind: "community" | "support") => {
+    const candidate = kind === "community" ? settings.discordInviteUrl : settings.discordSupportUrl;
+    const safeUrl = normalizeDiscordUrl(candidate);
+    if (!safeUrl) return false;
+    await shell.openExternal(safeUrl);
     return true;
   });
 
@@ -350,6 +611,9 @@ app.whenReady().then(() => {
       const args: Record<string, unknown> = { server };
       if (settings.gameDirectory) args.gameDirectory = settings.gameDirectory;
       const result = await getBridge().request("launch", args);
+      // Rich Presence is shown only for a game launch initiated from this launcher.
+      rememberRpLaunchActive = true;
+      rememberRpLaunchRequestedAt = Date.now();
       // Keep a short guard after MiNT accepts the command while GTA is starting up.
       launchPendingUntil = Date.now() + 45_000;
       return result;
@@ -371,5 +635,12 @@ app.whenReady().then(() => {
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-app.on("before-quit", () => { bridge?.kill(); });
+app.on("before-quit", () => {
+  bridge?.kill();
+  discordShouldConnect = false;
+  if (discordReconnectTimer) clearTimeout(discordReconnectTimer);
+  if (discordPresenceTimer) clearInterval(discordPresenceTimer);
+  discordRpcSocket?.end();
+  discordRpcSocket = null;
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
