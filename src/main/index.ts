@@ -162,6 +162,7 @@ let discordShouldConnect = false;
 let discordReconnectTimer: NodeJS.Timeout | null = null;
 let discordPresenceTimer: NodeJS.Timeout | null = null;
 let discordGameState: boolean | null = null;
+let rememberRpLaunchActive = false;
 let discordActivityStartedAt = Math.floor(Date.now() / 1000);
 let discordState: { connected: boolean; message: string } = {
   connected: false,
@@ -183,7 +184,9 @@ function discordFrame(opcode: number, payload: unknown) {
 
 function sendDiscordActivity() {
   if (!discordRpcSocket || !discordRpcReady) return;
-  const playing = isGameRunning();
+  const processRunning = isGameRunning();
+  const playing = rememberRpLaunchActive && processRunning;
+  if (rememberRpLaunchActive && !processRunning) rememberRpLaunchActive = false;
   if (discordGameState !== playing) {
     discordGameState = playing;
     discordActivityStartedAt = Math.floor(Date.now() / 1000);
@@ -591,6 +594,8 @@ app.whenReady().then(() => {
       const args: Record<string, unknown> = { server };
       if (settings.gameDirectory) args.gameDirectory = settings.gameDirectory;
       const result = await getBridge().request("launch", args);
+      // Rich Presence is shown only for a game launch initiated from this launcher.
+      rememberRpLaunchActive = true;
       // Keep a short guard after MiNT accepts the command while GTA is starting up.
       launchPendingUntil = Date.now() + 45_000;
       return result;
