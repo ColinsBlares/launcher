@@ -8,6 +8,12 @@ import {
 type LogItem = { title: string; detail: string; time: string };
 const formatBytes = (n?: number) => n == null ? "" : `${(n / 1024 / 1024).toFixed(1)} MB`;
 const timeNow = () => new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+const formatSpeed = (n?: number) => {
+  if (n == null || !Number.isFinite(n) || n <= 0) return "—";
+  if (n < 1024) return `${Math.round(n)} Б/с`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ/с`;
+  return `${(n / 1024 / 1024).toFixed(2)} МБ/с`;
+};
 
 export default function App() {
   const [settings, setSettings] = useState<any>({ mintPath: "D:\\MiNT\\Launcher.exe", gameDirectory: "", serverAddress: "127.0.0.1:22005", playerName: "Player" });
@@ -31,8 +37,9 @@ export default function App() {
   const [gameDetectMessage, setGameDetectMessage] = useState("");
   const [activeTab, setActiveTab] = useState("Главная");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [updateInfo, setUpdateInfo] = useState<any>({ status: "loading", message: "Загружаем состояние обновлений...", currentVersion: "0.1.0" });
+  const [updateInfo, setUpdateInfo] = useState<any>({ status: "loading", message: "Загружаем состояние обновлений...", currentVersion: "0.1.5" });
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [discordInfo, setDiscordInfo] = useState<any>({ connected: false, message: "Проверяем Discord..." });
 
   const addLog = (title: string, detail: string) => setLogs(old => [{ title, detail, time: timeNow() }, ...old].slice(0, 8));
   const currentServer = serverAddress || settings.serverAddress || "";
@@ -41,6 +48,12 @@ export default function App() {
     window.launcher.getUpdateStatus().then(setUpdateInfo).catch(() => undefined);
     const offUpdate = window.launcher.on("updater:status", setUpdateInfo);
     return () => offUpdate();
+  }, []);
+
+  useEffect(() => {
+    window.launcher.getDiscordStatus().then(setDiscordInfo).catch(() => undefined);
+    const offDiscord = window.launcher.on("discord:status", setDiscordInfo);
+    return () => offDiscord();
   }, []);
 
   useEffect(() => {
@@ -184,6 +197,38 @@ export default function App() {
     catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Ошибка проверки обновлений." }); }
     finally { setUpdateBusy(false); }
   }
+  async function retryUpdateDownload() {
+    setUpdateBusy(true);
+    try {
+      const checked = await window.launcher.checkForUpdates();
+      setUpdateInfo(checked);
+      if (checked?.status === "available") {
+        await window.launcher.downloadUpdate();
+      }
+    } catch (e: any) {
+      setUpdateInfo({ status: "error", message: e?.message || "Не удалось повторно загрузить обновление." });
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
+  async function stopUpdateDownload() {
+    try {
+      setUpdateInfo(await window.launcher.cancelUpdateDownload());
+    } catch (e: any) {
+      setUpdateInfo({ status: "error", message: e?.message || "Не удалось остановить загрузку." });
+    }
+  }
+
+  async function openDiscordLink(kind: "community" | "support") {
+    try {
+      const opened = await window.launcher.openDiscordLink(kind);
+      if (!opened) setError(kind === "community" ? "Ссылка на Discord-сообщество ещё не настроена." : "Ссылка на Discord-поддержку ещё не настроена.");
+    } catch (e: any) {
+      setError(e?.message || "Не удалось открыть Discord.");
+    }
+  }
+
   async function openUpdateRelease() {
     try { await window.launcher.openUpdateRelease(updateInfo.releaseUrl); }
     catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Не удалось открыть страницу релиза." }); }
@@ -259,6 +304,17 @@ export default function App() {
             <div className="news-item"><div className="news-date">DEVLOG <span>TECH</span></div><b>Игровой клиент Remember RP</b><p>Собственный интерфейс запуска игры и подготовки ресурсов.</p></div>
           </section>
         </div>
+        <section className="community-strip">
+          <div className="community-copy">
+            <span className="section-kicker">REMEMBER RP COMMUNITY</span>
+            <b>Будь на связи с проектом</b>
+            <small className={discordInfo.connected ? "discord-online" : ""}><span className="status-dot" /> {discordInfo.message || "Discord Rich Presence не подключён"}</small>
+          </div>
+          <div className="community-actions">
+            <button className="secondary-small" onClick={() => openDiscordLink("community")}><MessageCircle size={14}/> Сообщество Discord</button>
+            <button className="primary-small" onClick={() => openDiscordLink("support")}><Headphones size={14}/> Поддержка</button>
+          </div>
+        </section>
       </> : activeTab === "Поддержка" ? <section className="support-page">
         <div className="support-hero">
           <div className="support-hero-copy">
@@ -292,10 +348,11 @@ export default function App() {
             <div className="support-contact-icon"><MessageCircle size={22}/></div>
             <span className="section-kicker">НУЖНА ПОМОЩЬ?</span>
             <h2>Не нашёл<br/>ответ на вопрос?</h2>
-            <p>Канал связи с командой поддержки появится здесь после подключения сайта проекта.</p>
-            <div className="support-contact-status"><span/> КАНАЛ ПОДДЕРЖКИ ГОТОВИТСЯ</div>
+            <p>Напиши команде Remember RP в Discord. При обращении приложи описание проблемы и скриншот ошибки.</p>
+            <div className="support-contact-status"><span/> DISCORD SUPPORT</div>
+            <button className="primary-small support-discord-button" onClick={() => openDiscordLink("support")}><MessageCircle size={14}/> Открыть поддержку</button>
             <div className="support-contact-line"/>
-            <small>При обращении подготовь описание проблемы и скриншот ошибки.</small>
+            <small>Ссылка на поддержку настраивается в параметрах лаунчера.</small>
           </aside>
         </div>
       </section> : <section className="placeholder-page"><div className="stat-icon"><CircleHelp size={24}/></div><span className="section-kicker">COMING SOON</span><h1>{activeTab}</h1><p>Раздел будет подключён на следующем этапе разработки.</p><button className="secondary-small" onClick={() => setActiveTab("Главная")}>Вернуться на главную</button></section>}
@@ -341,17 +398,22 @@ export default function App() {
       <div className="updater-settings-card">
         <div className="updater-settings-head">
           <div className="updater-settings-icon"><RefreshCw size={17}/></div>
-          <div className="updater-settings-copy"><b>Обновления лаунчера</b><small>Текущая версия: {updateInfo.currentVersion || "0.1.0"}</small></div>
-          <span className={`updater-state ${updateInfo.status === "up-to-date" || updateInfo.status === "downloaded" ? "ok" : ""}`}>{updateInfo.status === "available" ? "ДОСТУПНО" : updateInfo.status === "downloaded" ? "ГОТОВО" : updateInfo.status === "up-to-date" ? "АКТУАЛЬНО" : updateInfo.status === "not-configured" ? "ОТКЛЮЧЕНО" : updateInfo.status === "downloading" ? "ЗАГРУЗКА" : ""}</span>
+          <div className="updater-settings-copy"><b>Умное обновление</b><small>Текущая версия: {updateInfo.currentVersion || "0.1.5"}</small></div>
+          <span className={`updater-state ${updateInfo.status === "up-to-date" || updateInfo.status === "downloaded" ? "ok" : ""}`}>{updateInfo.status === "available" ? "ДОСТУПНО" : updateInfo.status === "downloaded" ? "ГОТОВО" : updateInfo.status === "up-to-date" ? "АКТУАЛЬНО" : updateInfo.status === "not-configured" ? "ОТКЛЮЧЕНО" : updateInfo.status === "downloading" ? "ЗАГРУЗКА" : updateInfo.status === "cancelled" ? "ОСТАНОВЛЕНО" : updateInfo.status === "error" ? "ОШИБКА" : ""}</span>
         </div>
-        <p className="updater-message">{updateInfo.message || "Проверка обновлений через GitHub Releases."}</p>
-        {updateInfo.status === "downloading" && <div className="updater-progress"><div style={{ width: `${Math.max(0, Math.min(100, updateInfo.percent || 0))}%` }}/></div>}
+        <p className="updater-message">{updateInfo.message || "Обновления Remember RP через GitHub Releases."}</p>
+        {updateInfo.status === "downloading" && <>
+          <div className="updater-progress"><div style={{ width: `${Math.max(0, Math.min(100, updateInfo.percent || 0))}%` }}/></div>
+          <div className="updater-download-meta"><span>{updateInfo.percent || 0}%</span><span>{formatBytes(updateInfo.transferred)} / {formatBytes(updateInfo.total)}</span><b>{formatSpeed(updateInfo.bytesPerSecond)}</b></div>
+        </>}
         <div className="updater-actions">
           {updateInfo.status === "available" ? <button className="primary-small" onClick={async () => { setUpdateBusy(true); try { await window.launcher.downloadUpdate(); } catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Не удалось загрузить обновление." }); } finally { setUpdateBusy(false); } }} disabled={updateBusy}><Download size={13}/> Скачать {updateInfo.version}</button> : null}
+          {updateInfo.status === "downloading" ? <button className="secondary-small" onClick={stopUpdateDownload}><X size={13}/> Остановить загрузку</button> : null}
+          {(updateInfo.status === "cancelled" || updateInfo.status === "error") ? <button className="primary-small" onClick={retryUpdateDownload} disabled={updateBusy}><RefreshCw size={13}/> Повторить загрузку</button> : null}
           {updateInfo.status === "downloaded" ? <button className="primary-small" onClick={() => window.launcher.installUpdate()}><CheckCircle2 size={13}/> Перезапустить и установить</button> : null}
           <button className="secondary-small" onClick={checkUpdates} disabled={updateBusy || updateInfo.status === "downloading"}>{updateBusy || updateInfo.status === "checking" ? "Проверяем..." : "Проверить обновления"}</button>
         </div>
-        <small className="updater-footnote">Источник обновлений: GitHub Releases · ColinsBlares/launcher.</small>
+        <small className="updater-footnote">Используется дифференциальная загрузка блоков, если релиз содержит корректный blockmap. Скорость и прогресс обновляются в реальном времени.</small>
       </div>
       <label className="field-label">ПУТЬ К GTA V</label>
       <div className="game-path-row">
@@ -361,6 +423,16 @@ export default function App() {
       {gameDetectMessage && <div className="detect-message">{gameDetectMessage}</div>}
       <label className="field-label">АДРЕС ОСНОВНОГО СЕРВЕРА</label><input className="modal-input" value={settings.serverAddress || ""} onChange={e => { setSettings({ ...settings, serverAddress: e.target.value }); setServerAddress(e.target.value); }} placeholder="127.0.0.1:22005 — локальная заглушка"/>
       <label className="field-label">ИГРОВОЕ ИМЯ</label><input className="modal-input" value={settings.playerName} onChange={e => setSettings({ ...settings, playerName: e.target.value })}/>
+      <div className="settings-divider"><span className="section-kicker">DISCORD INTEGRATION</span></div>
+      <label className="field-label">APPLICATION ID ДЛЯ RICH PRESENCE</label>
+      <input className="modal-input" value={settings.discordClientId || ""} onChange={e => setSettings({ ...settings, discordClientId: e.target.value })} placeholder="ID приложения из Discord Developer Portal"/>
+      <label className="field-checkbox"><input type="checkbox" checked={Boolean(settings.discordPresenceEnabled)} onChange={e => setSettings({ ...settings, discordPresenceEnabled: e.target.checked })}/><span>Показывать статус Remember RP в Discord</span></label>
+      <div className={`discord-settings-status ${discordInfo.connected ? "connected" : ""}`}><span className="status-dot"/>{discordInfo.message || "Discord Rich Presence не подключён"}</div>
+      <label className="field-label">ССЫЛКА НА DISCORD-СООБЩЕСТВО</label>
+      <input className="modal-input" value={settings.discordInviteUrl || ""} onChange={e => setSettings({ ...settings, discordInviteUrl: e.target.value })} placeholder="https://discord.gg/..."/>
+      <label className="field-label">ССЫЛКА НА DISCORD-ПОДДЕРЖКУ</label>
+      <input className="modal-input" value={settings.discordSupportUrl || ""} onChange={e => setSettings({ ...settings, discordSupportUrl: e.target.value })} placeholder="https://discord.com/channels/..."/>
+      <small className="updater-footnote">Для Rich Presence Discord должен быть запущен на компьютере. Application ID создаётся в Discord Developer Portal.</small>
       <div className="modal-actions"><button className="secondary-small" onClick={() => setShowSettings(false)}>Отмена</button><button className="primary-small" onClick={saveSettings}>Сохранить настройки</button></div>
     </div></div>}
   </div>;
