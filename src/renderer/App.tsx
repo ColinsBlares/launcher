@@ -100,7 +100,7 @@ export default function App() {
         const status = await window.launcher.getMintStatus();
         setMintStatus(status);
         if (status.installed) {
-          await connectMiNT(loaded.serverAddress);
+          await connectMiNT();
         } else {
           pushError(new Error("Игровой клиент не найден рядом с лаунчером."));
         }
