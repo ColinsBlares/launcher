@@ -213,7 +213,7 @@ async function connectDiscordRpc() {
   discordConnectInProgress = true;
   try {
     for (let index = 0; index < 10; index += 1) {
-      const pipe = \`\\\\\\\\?\\\\pipe\\\\discord-ipc-\${index}\`;
+      const pipe = "\\\\?\\pipe\\discord-ipc-" + index;
       const socket = createConnection(pipe);
       const connected = await new Promise<boolean>((resolve) => {
         const timeout = setTimeout(() => {
