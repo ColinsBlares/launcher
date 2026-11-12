@@ -5,6 +5,9 @@ const api = {
   checkForUpdates: () => ipcRenderer.invoke("updater:check"),
   openUpdateRelease: (url?: string) => ipcRenderer.invoke("updater:open-release", url),
   downloadUpdate: () => ipcRenderer.invoke("updater:download"),
+  cancelUpdateDownload: () => ipcRenderer.invoke("updater:cancel-download"),
+  getDiscordStatus: () => ipcRenderer.invoke("discord:get-status"),
+  openDiscordLink: (kind: "community" | "support") => ipcRenderer.invoke("discord:open-link", kind),
   installUpdate: () => ipcRenderer.invoke("updater:install"),
   getSettings: () => ipcRenderer.invoke("app:get-settings"),
   detectGameDirectory: () => ipcRenderer.invoke("game:detect"),
@@ -22,7 +25,7 @@ const api = {
   confirmTrust: (data: Record<string, unknown>) => ipcRenderer.invoke("mint:trust-confirm", data),
   shutdownMint: () => ipcRenderer.invoke("mint:shutdown"),
   on: (channel: string, callback: (data: any) => void) => {
-    const allowed = ["mint:state", "mint:event", "mint:trust-required", "mint:log", "app:close-requested", "updater:status"];
+    const allowed = ["mint:state", "mint:event", "mint:trust-required", "mint:log", "app:close-requested", "updater:status", "discord:status"];
     if (!allowed.includes(channel)) return () => undefined;
     const listener = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
     ipcRenderer.on(channel, listener);
