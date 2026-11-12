@@ -1,0 +1,75 @@
+name: Publish Remember RP on version bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remember-rp-version-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify package and lockfile versions
+        shell: pwsh
+        run: |
+          $packageVersion = (node -p "require('./package.json').version").Trim()
+          $lockVersion = (node -p "require('./package-lock.json').version").Trim()
+          $rootLockVersion = (node -p "require('./package-lock.json').packages[''].version").Trim()
+          if ($packageVersion -ne $lockVersion -or $packageVersion -ne $rootLockVersion) {
+            throw "package.json and package-lock.json versions do not match."
+          }
+          if ($packageVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version must use MAJOR.MINOR.PATCH format."
+          }
+          "RELEASE_VERSION=$packageVersion" >> $env:GITHUB_ENV
+
+      - name: Create release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "v$env:RELEASE_VERSION"
+          gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag" --jq ".object.sha" 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            $existingSha = (gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag" --jq ".object.sha").Trim()
+            if ($existingSha -ne "$env:GITHUB_SHA") {
+              throw "Tag $tag already exists and points to a different commit: $existingSha"
+            }
+            Write-Host "Tag $tag already points to this commit."
+          } else {
+            gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$env:GITHUB_SHA"
+          }
+
+      - name: Download MiNT runtime package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release download runtime-assets --repo ColinsBlares/launcher --pattern mint-runtime.zip --dir .
+          if (!(Test-Path "mint-runtime.zip")) { throw "mint-runtime.zip was not downloaded from the runtime-assets release" }
+          Expand-Archive -Path "mint-runtime.zip" -DestinationPath "." -Force
+          if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "MiNT runtime archive must contain client/Launcher.exe" }
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build and publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release
