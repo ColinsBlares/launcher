@@ -37,7 +37,7 @@ export default function App() {
   const [gameDetectMessage, setGameDetectMessage] = useState("");
   const [activeTab, setActiveTab] = useState("Главная");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [updateInfo, setUpdateInfo] = useState<any>({ status: "loading", message: "Загружаем состояние обновлений...", currentVersion: "0.1.5" });
+  const [updateInfo, setUpdateInfo] = useState<any>({ status: "loading", message: "Загружаем состояние обновлений...", currentVersion: "0.1.6" });
   const [updateBusy, setUpdateBusy] = useState(false);
   const [discordInfo, setDiscordInfo] = useState<any>({ connected: false, message: "Проверяем Discord..." });
 
