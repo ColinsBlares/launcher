@@ -526,7 +526,7 @@ app.whenReady().then(() => {
       await autoUpdater.downloadUpdate(updateCancellationToken as any);
       return updateState;
     } catch (error) {
-      if (updateState.status !== "cancelled") {
+      if ((updateState.status as string) !== "cancelled") {
         publishUpdateState({ status: "error", message: (error as Error).message });
       }
       return updateState;
