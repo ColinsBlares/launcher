@@ -32,12 +32,14 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState(true);
+  const [bootProgress, setBootProgress] = useState(0);
+  const [bootMessage, setBootMessage] = useState("ИНИЦИАЛИЗАЦИЯ REMEMBER RP");
   const bootStartedAt = useRef(Date.now());
   const [detectingGame, setDetectingGame] = useState(false);
   const [gameDetectMessage, setGameDetectMessage] = useState("");
   const [activeTab, setActiveTab] = useState("Главная");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [updateInfo, setUpdateInfo] = useState<any>({ status: "loading", message: "Загружаем состояние обновлений...", currentVersion: "0.1.6" });
+  const [updateInfo, setUpdateInfo] = useState<any>({ status: "loading", message: "Загружаем состояние обновлений...", currentVersion: "0.1.7" });
   const [updateBusy, setUpdateBusy] = useState(false);
   const [discordInfo, setDiscordInfo] = useState<any>({ connected: false, message: "Проверяем Discord..." });
 
@@ -71,14 +73,30 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    const bootInterval = window.setInterval(() => {
+      const elapsed = Date.now() - bootStartedAt.current;
+      const percent = Math.min(94, Math.round((elapsed / 4200) * 94));
+      setBootProgress(percent);
+      if (percent < 16) setBootMessage("ЗАПУСК ЯДРА REMEMBER RP");
+      else if (percent < 34) setBootMessage("ПРОВЕРКА ИГРОВЫХ КОМПОНЕНТОВ");
+      else if (percent < 54) setBootMessage("ПОИСК УСТАНОВЛЕННОЙ GTA V");
+      else if (percent < 80) setBootMessage("ИНИЦИАЛИЗАЦИЯ MiNT CLIENT");
+      else setBootMessage("ПОДГОТОВКА ИНТЕРФЕЙСА");
+    }, 80);
+
     const finishBoot = async () => {
-      // Keep the cinematic intro visible for at least 1.6 seconds, even when
-      // settings and MiNT initialization complete almost instantly.
-      const remaining = Math.max(0, 1600 - (Date.now() - bootStartedAt.current));
+      // The visual progress is intentionally staged, but never completes
+      // before settings, GTA detection and MiNT initialization are finished.
+      const remaining = Math.max(0, 4200 - (Date.now() - bootStartedAt.current));
       if (remaining > 0) {
         await new Promise(resolve => window.setTimeout(resolve, remaining));
       }
-      if (active) setIsBooting(false);
+      if (active) {
+        setBootProgress(100);
+        setBootMessage("ЗАГРУЗКА ЗАВЕРШЕНА");
+        await new Promise(resolve => window.setTimeout(resolve, 320));
+        if (active) setIsBooting(false);
+      }
     };
 
     window.launcher.getSettings().then(async s => {
@@ -132,6 +150,7 @@ export default function App() {
     const offClose = window.launcher.on("app:close-requested", () => setShowExitConfirm(true));
     return () => {
       active = false;
+      window.clearInterval(bootInterval);
       offState(); offEvent(); offTrust(); offLog(); offClose();
     };
   }, []);
@@ -387,9 +406,9 @@ export default function App() {
         </div>
       </div>
       <div className="boot-loading-block">
-        <div className="boot-loader-head"><span>ЗАПУСК СИСТЕМЫ</span><span className="boot-loading-dots">•••</span></div>
-        <div className="boot-loader"><span/></div>
-        <div className="boot-caption"><span className="boot-caption-dot"/>ПОДГОТОВКА ИГРОВОГО КЛИЕНТА</div>
+        <div className="boot-loader-head"><span>ЗАПУСК ЛАУНЧЕРА</span><b className="boot-loading-percent">{bootProgress}%</b></div>
+        <div className="boot-loader"><span style={{ width: `${bootProgress}%` }}/></div>
+        <div className="boot-caption"><span className="boot-caption-dot"/>{bootMessage}</div>
       </div>
       <div className="boot-version">REMEMBER RP <b>•</b> OFFICIAL LAUNCHER</div>
     </div>}
@@ -423,16 +442,11 @@ export default function App() {
       {gameDetectMessage && <div className="detect-message">{gameDetectMessage}</div>}
       <label className="field-label">АДРЕС ОСНОВНОГО СЕРВЕРА</label><input className="modal-input" value={settings.serverAddress || ""} onChange={e => { setSettings({ ...settings, serverAddress: e.target.value }); setServerAddress(e.target.value); }} placeholder="127.0.0.1:22005 — локальная заглушка"/>
       <label className="field-label">ИГРОВОЕ ИМЯ</label><input className="modal-input" value={settings.playerName} onChange={e => setSettings({ ...settings, playerName: e.target.value })}/>
-      <div className="settings-divider"><span className="section-kicker">DISCORD INTEGRATION</span></div>
-      <label className="field-label">APPLICATION ID ДЛЯ RICH PRESENCE</label>
-      <input className="modal-input" value={settings.discordClientId || ""} onChange={e => setSettings({ ...settings, discordClientId: e.target.value })} placeholder="ID приложения из Discord Developer Portal"/>
-      <label className="field-checkbox"><input type="checkbox" checked={Boolean(settings.discordPresenceEnabled)} onChange={e => setSettings({ ...settings, discordPresenceEnabled: e.target.checked })}/><span>Показывать статус Remember RP в Discord</span></label>
-      <div className={`discord-settings-status ${discordInfo.connected ? "connected" : ""}`}><span className="status-dot"/>{discordInfo.message || "Discord Rich Presence не подключён"}</div>
+      <div className="settings-divider"><span className="section-kicker">DISCORD LINKS</span></div>
       <label className="field-label">ССЫЛКА НА DISCORD-СООБЩЕСТВО</label>
       <input className="modal-input" value={settings.discordInviteUrl || ""} onChange={e => setSettings({ ...settings, discordInviteUrl: e.target.value })} placeholder="https://discord.gg/..."/>
       <label className="field-label">ССЫЛКА НА DISCORD-ПОДДЕРЖКУ</label>
       <input className="modal-input" value={settings.discordSupportUrl || ""} onChange={e => setSettings({ ...settings, discordSupportUrl: e.target.value })} placeholder="https://discord.com/channels/..."/>
-      <small className="updater-footnote">Для Rich Presence Discord должен быть запущен на компьютере. Application ID создаётся в Discord Developer Portal.</small>
       <div className="modal-actions"><button className="secondary-small" onClick={() => setShowSettings(false)}>Отмена</button><button className="primary-small" onClick={saveSettings}>Сохранить настройки</button></div>
     </div></div>}
   </div>;
