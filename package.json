@@ -1,6 +1,6 @@
 {
   "name": "remember-rp-launcher",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "Remember RP official GTA V roleplay launcher",
   "main": "out/main/index.js",
