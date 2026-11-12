@@ -24,10 +24,10 @@ const defaults: Settings = {
   gameDirectory: "",
   serverAddress: "127.0.0.1:22005",
   playerName: "Player",
-  discordInviteUrl: "",
-  discordSupportUrl: "",
-  discordClientId: "",
-  discordPresenceEnabled: false
+  discordInviteUrl: "https://discord.gg/hgSDY99qyM",
+  discordSupportUrl: "https://discord.gg/hgSDY99qyM",
+  discordClientId: "1570458984077332561",
+  discordPresenceEnabled: true
 };
 
 let mainWindow: BrowserWindow | null = null;
@@ -110,6 +110,15 @@ function loadSettings() {
     const p = settingsFile();
     if (existsSync(p)) settings = { ...defaults, ...JSON.parse(readFileSync(p, "utf8")) };
   } catch (e) { console.error("Cannot read settings:", e); }
+
+  // Migrate installations created before Discord was configured. Once an
+  // Application ID is saved, keep the user's explicit Rich Presence toggle.
+  if (!String(settings.discordClientId || "").trim()) {
+    settings.discordClientId = defaults.discordClientId;
+    settings.discordPresenceEnabled = defaults.discordPresenceEnabled;
+  }
+  if (!normalizeDiscordUrl(settings.discordInviteUrl)) settings.discordInviteUrl = defaults.discordInviteUrl;
+  if (!normalizeDiscordUrl(settings.discordSupportUrl)) settings.discordSupportUrl = defaults.discordSupportUrl;
 
   // The installer places MiNT beside this launcher, so prefer that copy.
   const siblingPath = findSiblingMintLauncher();
