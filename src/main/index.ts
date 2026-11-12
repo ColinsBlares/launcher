@@ -314,8 +314,20 @@ function configureDiscordPresence() {
   }
   if (!/^\d{17,20}$/.test(clientId)) {
     discordShouldConnect = false;
+    const previous = discordRpcSocket;
+    discordRpcSocket = null;
+    discordRpcReady = false;
+    activeDiscordClientId = "";
+    previous?.end();
     publishDiscordState(false, "Укажи Application ID Discord в настройках.");
     return;
+  }
+  if (activeDiscordClientId && activeDiscordClientId !== clientId) {
+    const previous = discordRpcSocket;
+    discordRpcSocket = null;
+    discordRpcReady = false;
+    activeDiscordClientId = "";
+    previous?.end();
   }
   discordShouldConnect = true;
   void connectDiscordRpc();
