@@ -124,6 +124,7 @@ function prepareWritableMintRuntime(sourceRoot: string) {
   if (!existsSync(workingExecutable)) {
     mkdirSync(cacheRoot, { recursive: true });
     rmSync(stagingRoot, { recursive: true, force: true });
+    if (existsSync(versionRoot)) rmSync(versionRoot, { recursive: true, force: true });
     cpSync(sourceRoot, stagingRoot, { recursive: true, force: true, preserveTimestamps: true });
 
     const stagedExecutable = join(stagingRoot, "client", "Launcher.exe");
