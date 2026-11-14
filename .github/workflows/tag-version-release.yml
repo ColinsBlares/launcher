@@ -55,7 +55,7 @@ jobs:
             Where-Object { $_.Name -ne "runtime-manifest.json" } |
             Sort-Object FullName |
             ForEach-Object {
-              $relativePath = [System.IO.Path]::GetRelativePath($runtimeRoot, $_.FullName).Replace("\\", "/")
+              $relativePath = [System.IO.Path]::GetRelativePath($runtimeRoot, $_.FullName).Replace('\\', '/')
               $sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
               [PSCustomObject]@{ path = $relativePath; size = $_.Length; sha256 = $sha256 }
             }
