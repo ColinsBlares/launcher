@@ -20,8 +20,7 @@ export class MintBridge {
   async start(executable: string, workingDirectory = dirname(executable)) {
     if (this.isRunning()) return { running: true, commands: [...this.commandSet] };
     this.child = spawn(executable, ["--api"], {
-      // Use the runtime root. For bundled installs this is the parent of
-      // client/Launcher.exe; for standalone installs this is the Launcher.exe folder.
+      // Launch the bundled executable directly from resources/mint-runtime/client.
       cwd: workingDirectory,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
