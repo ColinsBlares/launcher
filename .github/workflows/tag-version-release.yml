@@ -48,6 +48,24 @@ jobs:
           Expand-Archive -Path "mint-runtime.zip" -DestinationPath "." -Force
           if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "MiNT runtime archive must contain client/Launcher.exe" }
 
+          # Create a manifest for the entire bundled runtime. The launcher uses
+          # it to make a new writable cache when any runtime file changes.
+          $runtimeRoot = (Resolve-Path "mint-runtime").Path
+          $manifestEntries = Get-ChildItem -LiteralPath $runtimeRoot -File -Recurse |
+            Where-Object { $_.Name -ne "runtime-manifest.json" } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relativePath = [System.IO.Path]::GetRelativePath($runtimeRoot, $_.FullName).Replace([string][char]92, "/")
+              $sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              [PSCustomObject]@{ path = $relativePath; size = $_.Length; sha256 = $sha256 }
+            }
+          $manifestJson = @($manifestEntries) | ConvertTo-Json -Depth 4
+          [System.IO.File]::WriteAllText(
+            (Join-Path $runtimeRoot "runtime-manifest.json"),
+            $manifestJson,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 

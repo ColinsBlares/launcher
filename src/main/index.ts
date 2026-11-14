@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { createConnection, type Socket } from "node:net";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { MintBridge } from "./mint-bridge";
 import { autoUpdater } from "electron-updater";
@@ -35,6 +35,7 @@ let bridge: MintBridge | null = null;
 let allowWindowClose = false;
 let launchInProgress = false;
 let launchPendingUntil = 0;
+let mintRuntimeError: string | null = null;
 let settings: Settings = { ...defaults };
 
 // GitHub Releases used by electron-updater. The repository must publish installer assets and latest.yml.
@@ -87,24 +88,74 @@ function configureAutoUpdater() {
   // network work during startup: a slow update server must never affect the UI.
 }
 
-function findSiblingMintLauncher() {
-  // In an installed build, app.getPath("exe") points to the user's launcher executable.
-  // In development, app.getAppPath() points to the project directory.
-  const appFolder = app.isPackaged ? dirname(app.getPath("exe")) : app.getAppPath();
-  const candidates = [
-    join(appFolder, "Launcher.exe"),
-    join(appFolder, "MiNT", "Launcher.exe"),
-    join(appFolder, "mint", "Launcher.exe"),
-    // Development layout and packaged extraResources layout.
-    join(appFolder, "mint-runtime", "client", "Launcher.exe"),
-    join(appFolder, "resources", "mint-runtime", "client", "Launcher.exe")
-  ];
-  return candidates.find(candidate => existsSync(candidate)) || "";
+function findBundledMintRoot() {
+  // In packaged builds extraResources are placed under process.resourcesPath.
+  // In development, the archive is extracted into the repository root.
+  const candidates = app.isPackaged
+    ? [join(process.resourcesPath, "mint-runtime")]
+    : [
+        join(app.getAppPath(), "mint-runtime"),
+        join(app.getAppPath(), "resources", "mint-runtime"),
+        join(process.resourcesPath, "mint-runtime")
+      ];
+  return candidates.find(root => existsSync(join(root, "client", "Launcher.exe"))) || "";
+}
+
+function prepareWritableMintRuntime(sourceRoot: string) {
+  const sourceExecutable = join(sourceRoot, "client", "Launcher.exe");
+  const manifestPath = join(sourceRoot, "runtime-manifest.json");
+  if (!existsSync(sourceExecutable)) {
+    throw new Error(`В комплекте Remember RP не найден MiNT: ${sourceExecutable}`);
+  }
+
+  // The release workflow writes a manifest containing hashes of every bundled
+  // runtime file. Older/dev archives fall back to the Launcher.exe checksum.
+  const fingerprintInput = existsSync(manifestPath)
+    ? readFileSync(manifestPath)
+    : readFileSync(sourceExecutable);
+  const fingerprint = createHash("sha256").update(fingerprintInput).digest("hex");
+
+  const localAppData = process.env.LOCALAPPDATA || join(app.getPath("home"), "AppData", "Local");
+  const cacheRoot = join(localAppData, "Remember RP", "MiNT Runtime");
+  const versionRoot = join(cacheRoot, fingerprint);
+  const stagingRoot = join(cacheRoot, `.staging-${fingerprint}-${process.pid}`);
+  const workingExecutable = join(versionRoot, "client", "Launcher.exe");
+
+  if (!existsSync(workingExecutable)) {
+    mkdirSync(cacheRoot, { recursive: true });
+    rmSync(stagingRoot, { recursive: true, force: true });
+    if (existsSync(versionRoot)) rmSync(versionRoot, { recursive: true, force: true });
+    cpSync(sourceRoot, stagingRoot, { recursive: true, force: true, preserveTimestamps: true });
+
+    const stagedExecutable = join(stagingRoot, "client", "Launcher.exe");
+    if (!existsSync(stagedExecutable)) {
+      rmSync(stagingRoot, { recursive: true, force: true });
+      throw new Error("Не удалось скопировать MiNT Runtime: Launcher.exe отсутствует в рабочей копии.");
+    }
+
+    try {
+      renameSync(stagingRoot, versionRoot);
+    } catch (error) {
+      // Another launcher instance may have completed the same copy first.
+      if (!existsSync(workingExecutable)) {
+        rmSync(stagingRoot, { recursive: true, force: true });
+        throw error;
+      }
+      rmSync(stagingRoot, { recursive: true, force: true });
+    }
+  }
+
+  return workingExecutable;
 }
 
 function settingsFile() {
   return join(app.getPath("userData"), "settings.json");
 }
+function persistSettingsFile() {
+  mkdirSync(app.getPath("userData"), { recursive: true });
+  writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), "utf8");
+}
+
 function loadSettings() {
   try {
     const p = settingsFile();
@@ -119,16 +170,33 @@ function loadSettings() {
   }
   if (!normalizeDiscordUrl(settings.discordInviteUrl)) settings.discordInviteUrl = defaults.discordInviteUrl;
   if (!normalizeDiscordUrl(settings.discordSupportUrl)) settings.discordSupportUrl = defaults.discordSupportUrl;
+}
 
-  // The installer places MiNT beside this launcher, so prefer that copy.
-  const siblingPath = findSiblingMintLauncher();
-  if (siblingPath) settings.mintPath = siblingPath;
+// Run this from the mint:status IPC request, after the splash screen is visible.
+// The first copy can be large, so do not block Electron before creating a window.
+function ensureWritableMintRuntime() {
+  const previousMintPath = settings.mintPath;
+  const bundledRoot = findBundledMintRoot();
+  try {
+    if (bundledRoot) {
+      settings.mintPath = prepareWritableMintRuntime(bundledRoot);
+      mintRuntimeError = null;
+    } else if (!settings.mintPath || !existsSync(settings.mintPath)) {
+      mintRuntimeError = "Не найден встроенный MiNT Runtime. Переустанови Remember RP или проверь комплект ресурсов.";
+      settings.mintPath = "";
+    } else {
+      // Keep a manually configured MiNT path for development / standalone use.
+      mintRuntimeError = null;
+    }
+  } catch (error) {
+    mintRuntimeError = `Не удалось подготовить MiNT в LocalAppData: ${error instanceof Error ? error.message : String(error)}`;
+    settings.mintPath = "";
+    console.error(mintRuntimeError);
+  }
 
-  if (siblingPath || !existsSync(settings.mintPath)) {
-    try {
-      mkdirSync(app.getPath("userData"), { recursive: true });
-      writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), "utf8");
-    } catch (e) { console.error("Cannot save detected MiNT path:", e); }
+  if (settings.mintPath !== previousMintPath || !existsSync(settingsFile())) {
+    try { persistSettingsFile(); }
+    catch (error) { console.error("Cannot save writable MiNT path:", error); }
   }
 }
 function normalizeDiscordUrl(value: unknown) {
@@ -597,14 +665,20 @@ app.whenReady().then(() => {
     mainWindow?.close();
     return true;
   });
-  ipcMain.handle("mint:status", () => ({
-    installed: existsSync(settings.mintPath),
-    mintPath: settings.mintPath,
-    running: getBridge().isRunning()
-  }));
+  ipcMain.handle("mint:status", () => {
+    ensureWritableMintRuntime();
+    return {
+      installed: Boolean(settings.mintPath && existsSync(settings.mintPath)),
+      mintPath: settings.mintPath,
+      running: getBridge().isRunning(),
+      error: mintRuntimeError || undefined
+    };
+  });
   ipcMain.handle("mint:start", async () => {
-    if (!existsSync(settings.mintPath)) {
-      throw new Error(`MiNT Launcher.exe не найден: ${settings.mintPath}. Установи MiNT и укажи правильный путь.`);
+    ensureWritableMintRuntime();
+    if (mintRuntimeError) throw new Error(mintRuntimeError);
+    if (!settings.mintPath || !existsSync(settings.mintPath)) {
+      throw new Error(`MiNT Launcher.exe не найден: ${settings.mintPath || "путь не настроен"}. Установи Remember RP заново или проверь ресурсы клиента.`);
     }
     return getBridge().start(settings.mintPath);
   });
