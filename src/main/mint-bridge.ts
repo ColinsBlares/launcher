@@ -1,4 +1,5 @@
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 
 type Message = Record<string, any>;
@@ -18,7 +19,13 @@ export class MintBridge {
 
   async start(executable: string) {
     if (this.isRunning()) return { running: true, commands: [...this.commandSet] };
-    this.child = spawn(executable, ["--api"], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    this.child = spawn(executable, ["--api"], {
+      // MiNT performs resource staging relative to its working directory.
+      // Run it from the writable LocalAppData copy, never from Program Files.
+      cwd: dirname(executable),
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
     const current = this.child;
     const ready = new Promise<void>((resolve, reject) => {
       this.readyResolve = resolve; this.readyReject = reject;
