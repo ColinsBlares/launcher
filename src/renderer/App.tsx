@@ -117,10 +117,12 @@ export default function App() {
       try {
         const status = await window.launcher.getMintStatus();
         setMintStatus(status);
-        if (status.installed) {
+        if (status.error) {
+          pushError(new Error(status.error));
+        } else if (status.installed) {
           await connectMiNT();
         } else {
-          pushError(new Error("Игровой клиент не найден рядом с лаунчером."));
+          pushError(new Error("Игровой клиент не найден. Проверь папку ресурсов Remember RP."));
         }
       } catch (e) {
         pushError(e);
