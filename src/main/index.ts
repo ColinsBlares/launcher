@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { createConnection, type Socket } from "node:net";
 import { createHash, randomUUID } from "node:crypto";
-import { join, dirname } from "node:path";
+import { join, dirname, relative, resolve, sep, isAbsolute } from "node:path";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { MintBridge } from "./mint-bridge";
@@ -37,6 +37,7 @@ let launchInProgress = false;
 let launchPendingUntil = 0;
 let mintRuntimeError: string | null = null;
 let mintWorkingDirectory = "";
+let mintRuntimeSource = "unknown";
 let settings: Settings = { ...defaults };
 
 // GitHub Releases used by electron-updater. The repository must publish installer assets and latest.yml.
@@ -151,6 +152,34 @@ function prepareWritableMintRuntime(sourceRoot: string): { executablePath: strin
   return { executablePath: workingExecutable, workingDirectory: versionRoot };
 }
 
+function isPathInside(candidatePath: string, parentPath: string) {
+  const rel = relative(resolve(parentPath), resolve(candidatePath));
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function findStandaloneMintExecutable() {
+  const localAppData = process.env.LOCALAPPDATA || join(app.getPath("home"), "AppData", "Local");
+  const bundledCache = join(localAppData, "Remember RP", "MiNT Runtime");
+  const protectedResources = app.isPackaged ? process.resourcesPath : "";
+
+  // Prefer the same standalone MiNT that is used by the VS Code development
+  // setup. The settings value can already point to the old bundled cache, so
+  // include the development default as an explicit fallback.
+  const candidates = [
+    settings.mintPath,
+    defaults.mintPath,
+    join(app.getPath("home"), "MiNT", "Launcher.exe")
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  for (const candidate of [...new Set(candidates)]) {
+    if (!existsSync(candidate)) continue;
+    if (isPathInside(candidate, bundledCache)) continue;
+    if (protectedResources && isPathInside(candidate, protectedResources)) continue;
+    return candidate;
+  }
+  return "";
+}
+
 function settingsFile() {
   return join(app.getPath("userData"), "settings.json");
 }
@@ -180,33 +209,42 @@ function loadSettings() {
 function ensureWritableMintRuntime() {
   const previousMintPath = settings.mintPath;
   const previousWorkingDirectory = mintWorkingDirectory;
+  const previousRuntimeSource = mintRuntimeSource;
+  const standaloneExecutable = findStandaloneMintExecutable();
   const bundledRoot = findBundledMintRoot();
   try {
-    if (bundledRoot) {
+    // If a standalone MiNT installation exists, use it first. This keeps the
+    // installed launcher on the exact same client binary as the working VS
+    // Code setup instead of silently switching to a different bundled build.
+    if (standaloneExecutable) {
+      settings.mintPath = standaloneExecutable;
+      mintWorkingDirectory = dirname(standaloneExecutable);
+      mintRuntimeSource = "standalone";
+      mintRuntimeError = null;
+    } else if (bundledRoot) {
       const runtime = prepareWritableMintRuntime(bundledRoot);
       settings.mintPath = runtime.executablePath;
       mintWorkingDirectory = runtime.workingDirectory;
+      mintRuntimeSource = "bundled";
       mintRuntimeError = null;
-    } else if (!settings.mintPath || !existsSync(settings.mintPath)) {
-      mintRuntimeError = "Не найден встроенный MiNT Runtime. Переустанови Remember RP или проверь комплект ресурсов.";
+    } else {
+      mintRuntimeError = "Не найден MiNT: нет отдельной установки и встроенного MiNT Runtime.";
       settings.mintPath = "";
       mintWorkingDirectory = "";
-    } else {
-      // A standalone MiNT installation (for example D:\\MiNT\\Launcher.exe)
-      // uses its own directory as the working root.
-      mintWorkingDirectory = dirname(settings.mintPath);
-      mintRuntimeError = null;
+      mintRuntimeSource = "missing";
     }
   } catch (error) {
-    mintRuntimeError = `Не удалось подготовить MiNT в LocalAppData: ${error instanceof Error ? error.message : String(error)}`;
+    mintRuntimeError = `Не удалось подготовить MiNT: ${error instanceof Error ? error.message : String(error)}`;
     settings.mintPath = "";
     mintWorkingDirectory = "";
+    mintRuntimeSource = "error";
     console.error(mintRuntimeError);
   }
 
-  if (settings.mintPath !== previousMintPath || mintWorkingDirectory !== previousWorkingDirectory || !existsSync(settingsFile())) {
+  if (settings.mintPath !== previousMintPath || mintWorkingDirectory !== previousWorkingDirectory ||
+      mintRuntimeSource !== previousRuntimeSource || !existsSync(settingsFile())) {
     try { persistSettingsFile(); }
-    catch (error) { console.error("Cannot save writable MiNT path:", error); }
+    catch (error) { console.error("Cannot save selected MiNT path:", error); }
   }
 }
 function normalizeDiscordUrl(value: unknown) {
@@ -691,7 +729,7 @@ app.whenReady().then(() => {
       throw new Error(`MiNT Launcher.exe не найден: ${settings.mintPath || "путь не настроен"}. Установи Remember RP заново или проверь ресурсы клиента.`);
     }
     const workingDirectory = mintWorkingDirectory || dirname(settings.mintPath);
-    const diagnostic = `[MiNT launch] executable=${settings.mintPath}; cwd=${workingDirectory}; packaged=${app.isPackaged}; appPath=${app.getAppPath()}; resourcesPath=${process.resourcesPath}`;
+    const diagnostic = `[MiNT launch] source=${mintRuntimeSource}; executable=${settings.mintPath}; cwd=${workingDirectory}; packaged=${app.isPackaged}; appPath=${app.getAppPath()}; resourcesPath=${process.resourcesPath}`;
     console.info(diagnostic);
     emit("mint:log", diagnostic);
     return getBridge().start(settings.mintPath, workingDirectory);
