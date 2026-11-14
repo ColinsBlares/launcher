@@ -151,6 +151,11 @@ function prepareWritableMintRuntime(sourceRoot: string) {
 function settingsFile() {
   return join(app.getPath("userData"), "settings.json");
 }
+function persistSettingsFile() {
+  mkdirSync(app.getPath("userData"), { recursive: true });
+  writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), "utf8");
+}
+
 function loadSettings() {
   try {
     const p = settingsFile();
@@ -165,9 +170,11 @@ function loadSettings() {
   }
   if (!normalizeDiscordUrl(settings.discordInviteUrl)) settings.discordInviteUrl = defaults.discordInviteUrl;
   if (!normalizeDiscordUrl(settings.discordSupportUrl)) settings.discordSupportUrl = defaults.discordSupportUrl;
+}
 
-  // Never run the bundled MiNT binary from Program Files / the read-only
-  // Electron resources directory. Stage a versioned copy under LocalAppData.
+// Run this from the mint:status IPC request, after the splash screen is visible.
+// The first copy can be large, so do not block Electron before creating a window.
+function ensureWritableMintRuntime() {
   const previousMintPath = settings.mintPath;
   const bundledRoot = findBundledMintRoot();
   try {
@@ -188,10 +195,8 @@ function loadSettings() {
   }
 
   if (settings.mintPath !== previousMintPath || !existsSync(settingsFile())) {
-    try {
-      mkdirSync(app.getPath("userData"), { recursive: true });
-      writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), "utf8");
-    } catch (e) { console.error("Cannot save detected MiNT path:", e); }
+    try { persistSettingsFile(); }
+    catch (error) { console.error("Cannot save writable MiNT path:", error); }
   }
 }
 function normalizeDiscordUrl(value: unknown) {
@@ -660,13 +665,17 @@ app.whenReady().then(() => {
     mainWindow?.close();
     return true;
   });
-  ipcMain.handle("mint:status", () => ({
-    installed: Boolean(settings.mintPath && existsSync(settings.mintPath)),
-    mintPath: settings.mintPath,
-    running: getBridge().isRunning(),
-    error: mintRuntimeError || undefined
-  }));
+  ipcMain.handle("mint:status", () => {
+    ensureWritableMintRuntime();
+    return {
+      installed: Boolean(settings.mintPath && existsSync(settings.mintPath)),
+      mintPath: settings.mintPath,
+      running: getBridge().isRunning(),
+      error: mintRuntimeError || undefined
+    };
+  });
   ipcMain.handle("mint:start", async () => {
+    ensureWritableMintRuntime();
     if (mintRuntimeError) throw new Error(mintRuntimeError);
     if (!settings.mintPath || !existsSync(settings.mintPath)) {
       throw new Error(`MiNT Launcher.exe не найден: ${settings.mintPath || "путь не настроен"}. Установи Remember RP заново или проверь ресурсы клиента.`);
