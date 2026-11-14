@@ -36,6 +36,7 @@ let allowWindowClose = false;
 let launchInProgress = false;
 let launchPendingUntil = 0;
 let mintRuntimeError: string | null = null;
+let mintWorkingDirectory = "";
 let settings: Settings = { ...defaults };
 
 // GitHub Releases used by electron-updater. The repository must publish installer assets and latest.yml.
@@ -101,7 +102,7 @@ function findBundledMintRoot() {
   return candidates.find(root => existsSync(join(root, "client", "Launcher.exe"))) || "";
 }
 
-function prepareWritableMintRuntime(sourceRoot: string) {
+function prepareWritableMintRuntime(sourceRoot: string): { executablePath: string; workingDirectory: string } {
   const sourceExecutable = join(sourceRoot, "client", "Launcher.exe");
   const manifestPath = join(sourceRoot, "runtime-manifest.json");
   if (!existsSync(sourceExecutable)) {
@@ -145,7 +146,9 @@ function prepareWritableMintRuntime(sourceRoot: string) {
     }
   }
 
-  return workingExecutable;
+  // The runtime archive has client/Launcher.exe under its root. MiNT's
+  // staging/cache layout is rooted beside the client folder, not inside it.
+  return { executablePath: workingExecutable, workingDirectory: versionRoot };
 }
 
 function settingsFile() {
@@ -176,25 +179,32 @@ function loadSettings() {
 // The first copy can be large, so do not block Electron before creating a window.
 function ensureWritableMintRuntime() {
   const previousMintPath = settings.mintPath;
+  const previousWorkingDirectory = mintWorkingDirectory;
   const bundledRoot = findBundledMintRoot();
   try {
     if (bundledRoot) {
-      settings.mintPath = prepareWritableMintRuntime(bundledRoot);
+      const runtime = prepareWritableMintRuntime(bundledRoot);
+      settings.mintPath = runtime.executablePath;
+      mintWorkingDirectory = runtime.workingDirectory;
       mintRuntimeError = null;
     } else if (!settings.mintPath || !existsSync(settings.mintPath)) {
       mintRuntimeError = "Не найден встроенный MiNT Runtime. Переустанови Remember RP или проверь комплект ресурсов.";
       settings.mintPath = "";
+      mintWorkingDirectory = "";
     } else {
-      // Keep a manually configured MiNT path for development / standalone use.
+      // A standalone MiNT installation (for example D:\\MiNT\\Launcher.exe)
+      // uses its own directory as the working root.
+      mintWorkingDirectory = dirname(settings.mintPath);
       mintRuntimeError = null;
     }
   } catch (error) {
     mintRuntimeError = `Не удалось подготовить MiNT в LocalAppData: ${error instanceof Error ? error.message : String(error)}`;
     settings.mintPath = "";
+    mintWorkingDirectory = "";
     console.error(mintRuntimeError);
   }
 
-  if (settings.mintPath !== previousMintPath || !existsSync(settingsFile())) {
+  if (settings.mintPath !== previousMintPath || mintWorkingDirectory !== previousWorkingDirectory || !existsSync(settingsFile())) {
     try { persistSettingsFile(); }
     catch (error) { console.error("Cannot save writable MiNT path:", error); }
   }
@@ -680,7 +690,11 @@ app.whenReady().then(() => {
     if (!settings.mintPath || !existsSync(settings.mintPath)) {
       throw new Error(`MiNT Launcher.exe не найден: ${settings.mintPath || "путь не настроен"}. Установи Remember RP заново или проверь ресурсы клиента.`);
     }
-    return getBridge().start(settings.mintPath);
+    const workingDirectory = mintWorkingDirectory || dirname(settings.mintPath);
+    const diagnostic = `[MiNT launch] executable=${settings.mintPath}; cwd=${workingDirectory}; packaged=${app.isPackaged}; appPath=${app.getAppPath()}; resourcesPath=${process.resourcesPath}`;
+    console.info(diagnostic);
+    emit("mint:log", diagnostic);
+    return getBridge().start(settings.mintPath, workingDirectory);
   });
   ipcMain.handle("mint:servers", async () => getBridge().request("servers.list"));
   ipcMain.handle("mint:prepare", async (_e, server: string) => getBridge().request("prepare", { server }));
