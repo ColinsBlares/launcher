@@ -1,6 +1,6 @@
 {
   "name": "remember-rp-launcher",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "Remember RP official GTA V roleplay launcher",
   "main": "out/main/index.js",
@@ -46,8 +46,10 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "perMachine": false,
+      "allowElevation": false
     },
     "extraResources": [
       {
