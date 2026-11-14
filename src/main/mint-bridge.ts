@@ -17,12 +17,12 @@ export class MintBridge {
   constructor(notify: (channel: string, data: unknown) => void) { this.notify = notify; }
   isRunning() { return !!this.child && !this.child.killed; }
 
-  async start(executable: string) {
+  async start(executable: string, workingDirectory = dirname(executable)) {
     if (this.isRunning()) return { running: true, commands: [...this.commandSet] };
     this.child = spawn(executable, ["--api"], {
-      // MiNT performs resource staging relative to its working directory.
-      // Run it from the writable LocalAppData copy, never from Program Files.
-      cwd: dirname(executable),
+      // Use the runtime root. For bundled installs this is the parent of
+      // client/Launcher.exe; for standalone installs this is the Launcher.exe folder.
+      cwd: workingDirectory,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
     });
