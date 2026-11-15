@@ -41,6 +41,11 @@ jobs:
           if (!(Test-Path "mint-runtime.zip")) { throw "mint-runtime.zip was not downloaded from the runtime-assets release" }
           Expand-Archive -Path "mint-runtime.zip" -DestinationPath "." -Force
           if (!(Test-Path "mint-runtime/client/Launcher.exe")) { throw "MiNT runtime archive must contain client/Launcher.exe" }
+          if (!(Test-Path "mint-runtime/client/client.toml")) { throw "MiNT runtime archive must contain the clean client.toml template" }
+          $resourcePackage = Get-ChildItem "mint-runtime/client/client-resource-cache" -Filter "resource.pkg" -File -Recurse | Select-Object -First 1
+          if (!$resourcePackage) { throw "MiNT runtime archive must contain its working resource cache package" }
+          $stagingDirectory = Get-ChildItem "mint-runtime/client/client-resource-cache" -Directory -Recurse | Where-Object { $_.Name -eq "staging" } | Select-Object -First 1
+          if (!$stagingDirectory) { throw "MiNT runtime archive must include a resource staging directory" }
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
