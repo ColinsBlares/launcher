@@ -482,7 +482,7 @@ function detectGameDirectory() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280, height: 800, minWidth: 1280, minHeight: 800, maxWidth: 1280, maxHeight: 800,
+    width: 1280, height: 853, minWidth: 1280, minHeight: 853, maxWidth: 1280, maxHeight: 853,
     frame: false, resizable: false, maximizable: false, fullscreenable: false, center: true,
     backgroundColor: "#09090b", title: "Remember RP Launcher",
     autoHideMenuBar: true,
