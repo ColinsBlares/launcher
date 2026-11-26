@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ChevronRight, ChevronDown,
-  CircleHelp, Gauge, Headphones, Monitor, Newspaper, Play, Users, UsersRound,
+  CircleHelp, Gauge, Headphones, Monitor, Newspaper, Play, Users, UsersRound, Store, MessageSquare,
   Settings, X, Zap, Minus, MessageCircle, BookOpen, Wrench, ShieldCheck, LifeBuoy, Download, RefreshCw, CheckCircle2
 } from "lucide-react";
 
@@ -262,80 +262,63 @@ export default function App() {
   }
 
   const nav = [
-    { label: "Главная", icon: Gauge }, { label: "Новости", icon: Newspaper },
-    { label: "Поддержка", icon: Headphones }
+    { label: "Главная", title: "Играть", icon: Play },
+    { label: "Магазин", title: "Магазин", icon: Store },
+    { label: "Новости", title: "Новости", icon: Newspaper },
+    { label: "Форум", title: "Форум", icon: MessageSquare },
+    { label: "Wiki", title: "Wiki", icon: BookOpen }
   ];
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">R</div><div><b>REMEMBER<span> RP</span></b><small>ROLEPLAY PROJECT</small></div></div>
-      <div className="nav-caption">МЕНЮ</div>
-      {nav.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${activeTab === label ? "active" : ""}`} onClick={() => setActiveTab(label)}><Icon size={18}/>{label}{label === "Главная" && <i/>}</button>)}
+      <div className="brand"><div className="brand-mark">R</div><div><b>REMEMBER<span> RP</span></b></div></div>
+      <div className="nav-caption">НАВИГАЦИЯ</div>
+      {nav.map(({ label, title, icon: Icon }) => <button key={label} className={`nav-item ${activeTab === label ? "active" : ""}`} onClick={() => setActiveTab(label)}><Icon size={19}/>{title}{label === "Главная" && <i/>}</button>)}
+      <button className="nav-item" onClick={() => openDiscordLink("community")}><MessageCircle size={19}/>Дискорд</button>
       <div className="sidebar-bottom">
-        <button className="nav-item" onClick={() => setShowSettings(true)}><Settings size={18}/>Настройки</button>
-        <div className="profile"><div className="avatar">P</div><div><b>{settings.playerName || "Player"}</b><small>Игровой профиль</small></div><button className="icon-btn" onClick={() => setShowSettings(true)}><Settings size={17}/></button></div>
+        <button className="nav-item" onClick={() => setShowSettings(true)}><Settings size={19}/>Настройки</button>
+        <div className="profile-card">
+          <div className="profile-card-top"><div className="profile-avatar">{(settings.playerName || "P").slice(0,1).toUpperCase()}</div><div className="profile-card-name"><b>{settings.playerName || "Player"}</b><small>Игровой профиль</small></div></div>
+          <div className="profile-card-id">REMEMBER RP <span>•</span> ID не привязан</div>
+          <div className="profile-card-balance"><b>—</b><span>Донат-счёт</span></div>
+          <button className="profile-logout" onClick={() => setShowExitConfirm(true)}>Выход</button>
+        </div>
       </div>
     </aside>
 
     <main className="main page-transition" key={activeTab}>
-      <header className="topbar"><div className="crumb">REMEMBER RP <ChevronRight size={14}/> <b>{activeTab.toUpperCase()}</b></div><div className="top-right"><span className="top-status"><span className={`status-dot ${connected ? "green" : ""}`}/>{connected ? "СИСТЕМА ГОТОВА" : "ОЖИДАНИЕ"}</span><button className="icon-btn" onClick={() => setShowSettings(true)} title="Настройки"><Settings size={18}/></button><div className="window-controls"><button className="window-control" onClick={() => window.launcher.minimizeWindow()} title="Свернуть"><Minus size={15}/></button><button className="window-control close" onClick={() => window.launcher.closeWindow()} title="Закрыть лаунчер"><X size={16}/></button></div></div></header>
+      <header className="topbar screenshot-topbar"><div className="top-live"><span className="status-dot green"/>{serverStats.players === null ? "СЕРВЕР ONLINE" : `${serverStats.players} игроков`}<span className="top-version">v{updateInfo.currentVersion || "0.1.14"}</span></div><div className="top-right"><div className="window-controls"><button className="window-control" onClick={() => window.launcher.minimizeWindow()} title="Свернуть"><Minus size={17}/></button><button className="window-control close" onClick={() => window.launcher.closeWindow()} title="Закрыть лаунчер"><X size={17}/></button></div></div></header>
 
       {activeTab === "Главная" ? <>
-        <section className="hero">
-          <div className="hero-bg"/>
-          <div className="hero-content">
-            <div className="eyebrow"><span/> LOS SANTOS ROLEPLAY</div>
-            <h1>ТВОЯ ИСТОРИЯ.<br/><em>ТВОИ ПРАВИЛА.</em></h1>
-            <p>Добро пожаловать в мир, где каждый выбор имеет значение.<br/>Подключайся и создавай собственную историю.</p>
-            <div className="hero-actions">
-              <button className="play-btn" onClick={runGame} disabled={busy || gameRunning}><Play size={18} fill="currentColor"/>{gameRunning ? "GTA V ЗАПУЩЕНА" : busy ? "ЗАПУСК..." : "ИГРАТЬ"}</button>
-            </div>
-            {busy && <div className="download-progress" role="status" aria-live="polite">
-              <div className="download-progress-head">
-                <span className="download-progress-label">{stage}</span>
-                <b>{progress === null ? "ВЫПОЛНЯЕТСЯ" : `${progress}%`}</b>
-              </div>
-              <div className="download-progress-track">
-                <div className={`download-progress-fill ${progress === null ? "indeterminate" : ""}`} style={progress === null ? undefined : { width: `${Math.max(0, Math.min(100, progress))}%` }}/>
-              </div>
-              <div className="download-progress-foot">Загрузка и подготовка игровых ресурсов</div>
+        <section className="screenshot-hero">
+          <div className="screenshot-hero-image"/>
+          <div className="screenshot-hero-shade"/>
+          <div className="screenshot-hero-copy">
+            <div className="screenshot-hero-kicker">REMEMBER RP <span>•</span> LOS SANTOS</div>
+            <button className="screenshot-play" onClick={runGame} disabled={busy || gameRunning}>
+              <Play size={32} fill="currentColor"/>
+              <span>{gameRunning ? "Игра уже запущена" : busy ? "Подготовка игры..." : "Начать игру"}</span>
+            </button>
+            {busy && <div className="download-progress screenshot-progress" role="status" aria-live="polite">
+              <div className="download-progress-head"><span className="download-progress-label">{stage}</span><b>{progress === null ? "ВЫПОЛНЯЕТСЯ" : `${progress}%`}</b></div>
+              <div className="download-progress-track"><div className={`download-progress-fill ${progress === null ? "indeterminate" : ""}`} style={progress === null ? undefined : { width: `${Math.max(0, Math.min(100, progress))}%` }}/></div>
             </div>}
           </div>
-          <div className="hero-side">
-            <div className="server-live-label"><span className="live-indicator"/> LIVE SERVER STATUS</div>
-            <div className="hero-stat-grid">
-              <div className="hero-stat">
-                <div className="hero-stat-icon"><Users size={17}/></div>
-                <strong>{serverStats.players === null ? "—" : serverStats.players.toLocaleString("ru-RU")}</strong>
-                <span>ИГРОКОВ ОНЛАЙН</span>
-              </div>
-              <div className="hero-stat">
-                <div className="hero-stat-icon"><UsersRound size={17}/></div>
-                <strong>{serverStats.slots === null ? "—" : serverStats.slots.toLocaleString("ru-RU")}</strong>
-                <span>ВСЕГО СЛОТОВ</span>
-              </div>
+          <div className="screenshot-hero-stats"><span className="screenshot-live-dot"/><b>{serverStats.players === null ? "Сервер Remember RP" : `${serverStats.players} игроков`}</b><span className="screenshot-version">v{updateInfo.currentVersion || "0.1.14"}</span></div>
+        </section>
+        <div className="screenshot-content">
+          <section className="screenshot-news">
+            <div className="screenshot-section-heading"><h2>Недавние новости</h2><span>Все новости <ChevronRight size={15}/></span></div>
+            <div className="screenshot-news-grid">
+              <article className="screenshot-news-card news-car"><div className="screenshot-news-image"/><div className="screenshot-news-copy"><b>Развитие Remember RP 🚘</b><p>Мы продолжаем работу над игровым миром, системами и возможностями проекта.</p><button onClick={() => setActiveTab("Новости")}>Читать полностью <ChevronRight size={15}/></button></div></article>
+              <article className="screenshot-news-card news-city"><div className="screenshot-news-image"/><div className="screenshot-news-copy"><b>Здесь начнётся твоя история</b><p>Создаём место, в котором каждый игрок сможет написать собственную историю.</p><button onClick={() => setActiveTab("Новости")}>Читать полностью <ChevronRight size={15}/></button></div></article>
             </div>
-            <div className="hero-server-foot"><span className="status-dot green"/> ОСНОВНОЙ СЕРВЕР</div>
-          </div>
-        </section>
-
-        <div className="content-grid single-server-home">
-          <section className="panel news-panel">
-            <div className="panel-title"><div><span className="section-kicker">LATEST UPDATES</span><h2>Последние новости</h2></div><Newspaper size={19} className="muted-icon"/></div>
-            <div className="news-item"><div className="news-date">10.11.2026 <span>LAUNCHER</span></div><b>Первый запуск проекта</b><p>Настраиваем клиент и готовим инфраструктуру для подключения к игровому миру.</p></div>
-            <div className="news-item"><div className="news-date">DEVLOG <span>TECH</span></div><b>Игровой клиент Remember RP</b><p>Собственный интерфейс запуска игры и подготовки ресурсов.</p></div>
           </section>
+          <aside className="screenshot-deals">
+            <div className="screenshot-section-heading"><h2>Выгодно</h2></div>
+            <div className="screenshot-deal-card"><span className="deal-label">REMEMBER RP</span><b>Твой путь начинается здесь</b><p>Следи за новостями проекта и не пропускай важные события.</p><button onClick={() => setActiveTab("Новости")}>Подробнее <ChevronRight size={15}/></button></div>
+            <div className="screenshot-discord-card"><MessageCircle size={19}/><div><b>Наше сообщество</b><small>Общайся с игроками в Discord</small></div><button onClick={() => openDiscordLink("community")}><ChevronRight size={17}/></button></div>
+          </aside>
         </div>
-        <section className="community-strip">
-          <div className="community-copy">
-            <span className="section-kicker">REMEMBER RP COMMUNITY</span>
-            <b>Будь на связи с проектом</b>
-            <small className={discordInfo.connected ? "discord-online" : ""}><span className="status-dot" /> {discordInfo.message || "Discord Rich Presence не подключён"}</small>
-          </div>
-          <div className="community-actions">
-            <button className="secondary-small" onClick={() => openDiscordLink("community")}><MessageCircle size={14}/> Сообщество Discord</button>
-            <button className="primary-small" onClick={() => openDiscordLink("support")}><Headphones size={14}/> Поддержка</button>
-          </div>
-        </section>
       </> : activeTab === "Поддержка" ? <section className="support-page">
         <div className="support-hero">
           <div className="support-hero-copy">
