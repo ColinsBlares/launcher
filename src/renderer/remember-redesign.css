@@ -1,0 +1,68 @@
+/* Remember RP — cinematic launcher redesign */
+:root{color-scheme:dark}
+html,body,#root{background:#080809}
+.app-shell{background:#080809}
+.sidebar{width:255px;padding:26px 20px 18px;background:#050506;border-right:1px solid #242124}
+.brand{padding:0 8px 48px;gap:13px}
+.brand-mark{width:44px;height:44px;border-radius:8px;clip-path:none;font:800 30px Inter,sans-serif;box-shadow:0 8px 25px #d7193038}
+.brand b{font:800 20px Inter,sans-serif;letter-spacing:-.5px}
+.brand small{font:500 10px Inter,sans-serif;letter-spacing:.4px;color:#969198}
+.nav-caption{display:none}
+.nav-item{height:48px;margin:0 0 7px;padding:0 14px;gap:14px;border:1px solid transparent;border-radius:9px;font-size:13px;color:#99969d}
+.nav-item.active{background:linear-gradient(100deg,#68131f,#230d12);border-color:#a51d2e;box-shadow:0 5px 22px #c71d3025}
+.nav-item.active:before{display:none}
+.nav-item.active svg{color:#fff}
+.nav-item i{display:none}
+.sidebar-bottom{margin-top:auto}
+.profile{border:1px solid #302b30;border-radius:13px;padding:14px 12px;margin-top:14px;background:linear-gradient(145deg,#1a171b,#101012);gap:11px}
+.avatar{width:42px;height:42px;border-radius:50%;font:700 18px Inter;background:linear-gradient(145deg,#8b2635,#261116);color:#fff}
+.profile b{font-size:11px;color:#fff}
+.profile small{font-size:9px;color:#8c8790}
+.profile .icon-btn{margin-left:auto}
+.main{width:1025px;padding:0 27px;max-width:none}
+.topbar{height:58px;flex-basis:58px;margin:0 0 13px;border-bottom:0}
+.crumb{font-size:10px;color:#aaa4ac}
+.crumb b{color:#f5f2f4}
+.top-right{gap:12px}
+.top-status{padding:9px 13px;border:1px solid #353037;background:#151317;border-radius:24px;font-size:9px;letter-spacing:.5px}
+.icon-btn{border-radius:50%}
+.window-controls{gap:7px}
+.window-control{width:38px;height:38px;border-radius:50%;background:#29242b;color:#fff}
+.window-control.close{background:#8e1e2b;color:#fff}
+.window-control.close:hover{background:#d52b3e}
+.hero{height:335px;min-height:335px;margin:0 0 17px;border:0;border-radius:13px;background:#171015;box-shadow:0 18px 45px #0008}
+.hero-bg{filter:none;background:linear-gradient(90deg,#080709c9 0%,#10090c70 50%,#09070935 100%),linear-gradient(0deg,#080809 0%,transparent 45%),url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1800&q=88') center 55%/cover}
+.hero:after{display:none}
+.hero:before{content:"●  REMEMBER RP ONLINE     •     v0.1.13";position:absolute;z-index:2;top:22px;left:25px;padding:9px 14px;border:1px solid #ffffff24;border-radius:30px;background:#09080a88;color:#f0eaf0;font:700 10px Inter,sans-serif;letter-spacing:.4px;backdrop-filter:blur(8px)}
+.hero-content{position:absolute;z-index:2;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 24px 22px}
+.eyebrow{display:none}
+.hero h1{font:800 39px/1.05 Inter,sans-serif;letter-spacing:-1.2px;margin:0 0 12px;text-shadow:0 4px 22px #000b}
+.hero h1 em{color:#ff4055}
+.hero p{font-size:12px;line-height:1.65;color:#eee8ec;text-shadow:0 2px 12px #000;margin:0 0 20px}
+.hero-actions{justify-content:center}
+.play-btn{height:58px;min-width:285px;padding:0 30px;border-radius:13px;background:linear-gradient(110deg,#e21e35,#8f1425);border:1px solid #ff5263;font-size:17px;letter-spacing:.2px;box-shadow:0 10px 34px #d51c3655}
+.play-btn svg{width:21px;height:21px}
+.hero-side{display:none}
+.hero:has(.download-progress){height:335px}
+.download-progress{width:min(430px,80%);border-radius:10px}
+.content-grid.single-server-home{display:block;margin:0}
+.news-panel{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0;border:0;background:transparent;min-height:0}
+.news-panel .panel-title{grid-column:1/-1;margin:0 0 1px;padding:0 2px}
+.panel-title h2{font:750 20px Inter,sans-serif;letter-spacing:-.4px}
+.panel-title .section-kicker{display:none}
+.news-panel .muted-icon{display:none}
+.news-item{position:relative;min-height:190px;margin:0;padding:112px 17px 14px;border:1px solid #343037;border-radius:12px;overflow:hidden;background:linear-gradient(0deg,#111013 0%,#111013f2 43%,#11101308 100%),url('https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=80') center 34%/cover}
+.news-item:nth-of-type(3){background:linear-gradient(0deg,#111013 0%,#111013f2 43%,#11101308 100%),url('https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=900&q=80') center 40%/cover}
+.news-date{font-size:8px;color:#d2cbd1}
+.news-date span{padding:4px 8px;border-radius:20px;background:#a71d30;color:#fff}
+.news-item b{display:block;font-size:13px;color:#fff}
+.news-item p{font-size:10px;color:#c4bec5;line-height:1.5;margin-top:5px}
+.community-strip{margin-top:13px;padding:12px 15px;border:1px solid #47232b;border-radius:11px;background:linear-gradient(100deg,#281017,#141014 70%)}
+.community-copy>b{font:700 14px Inter,sans-serif}
+.community-copy>small{font-size:8px}
+.community-actions button{height:31px;border-radius:8px}
+footer{margin-top:auto;padding:10px 0 0;font-size:7px}
+.support-hero,.support-contact-card,.updater-settings-card{border-radius:11px}
+.modal{border-radius:13px}
+.modal-input{border-radius:8px}
+@media(max-width:1280px){.sidebar{width:230px}.main{padding:0 20px}}
