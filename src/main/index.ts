@@ -407,7 +407,7 @@ function isGameRunning(): Promise<boolean> {
         resolve(lastKnownGameRunning);
         return;
       }
-      const running = String(stdout || "").split(/\\r?\\n/).some(line => {
+      const running = String(stdout || "").split(/\r?\n/).some(line => {
         const imageName = line.match(/^"([^"]+)"/i)?.[1]?.toLowerCase();
         return imageName === "gta5.exe" || imageName === "gta5_enhanced.exe";
       });
