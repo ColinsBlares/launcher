@@ -3,7 +3,7 @@ import { createConnection, type Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { MintBridge } from "./mint-bridge";
 import { autoUpdater } from "electron-updater";
 import type { UpdateInfo, ProgressInfo } from "electron-updater";
@@ -228,7 +228,8 @@ function discordFrame(opcode: number, payload: unknown) {
 
 function sendDiscordActivity() {
   if (!discordRpcSocket || !discordRpcReady) return;
-  const processRunning = isGameRunning();
+  // Reuse asynchronously refreshed state; do not block Electron's main thread.
+  const processRunning = lastKnownGameRunning;
   const waitingForGameStart = rememberRpLaunchActive && !processRunning && Date.now() - rememberRpLaunchRequestedAt < 90_000;
   const playing = rememberRpLaunchActive && (processRunning || waitingForGameStart);
   if (rememberRpLaunchActive && !processRunning && !waitingForGameStart) rememberRpLaunchActive = false;
@@ -384,20 +385,39 @@ function startDiscordPresencePolling() {
   }, 5000);
 }
 
-function isGameRunning() {
-  if (process.platform !== "win32") return false;
-  try {
-    // Check the actual GTA process, not the Rockstar/Epic launcher.
-    const output = execFileSync("tasklist", ["/FO", "CSV", "/NH"], {
-      encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"]
+let lastKnownGameRunning = false;
+let gameProcessCheckInFlight: Promise<boolean> | null = null;
+let lastGameProcessCheckAt = 0;
+
+function isGameRunning(): Promise<boolean> {
+  if (process.platform !== "win32") return Promise.resolve(false);
+  const now = Date.now();
+  if (gameProcessCheckInFlight) return gameProcessCheckInFlight;
+  if (now - lastGameProcessCheckAt < 700) return Promise.resolve(lastKnownGameRunning);
+
+  gameProcessCheckInFlight = new Promise<boolean>((resolve) => {
+    execFile("tasklist", ["/FO", "CSV", "/NH"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 5000,
+      maxBuffer: 2 * 1024 * 1024
+    }, (error, stdout) => {
+      lastGameProcessCheckAt = Date.now();
+      if (error) {
+        resolve(lastKnownGameRunning);
+        return;
+      }
+      const running = String(stdout || "").split(/\\r?\\n/).some(line => {
+        const imageName = line.match(/^"([^"]+)"/i)?.[1]?.toLowerCase();
+        return imageName === "gta5.exe" || imageName === "gta5_enhanced.exe";
+      });
+      lastKnownGameRunning = running;
+      resolve(running);
     });
-    return output.split(/\r?\n/).some(line => {
-      const imageName = line.match(/^"([^"]+)"/i)?.[1]?.toLowerCase();
-      return imageName === "gta5.exe" || imageName === "gta5_enhanced.exe";
-    });
-  } catch {
-    return false;
-  }
+  }).finally(() => {
+    gameProcessCheckInFlight = null;
+  });
+  return gameProcessCheckInFlight;
 }
 
 function isGameDirectory(candidate: string) {
@@ -618,7 +638,7 @@ app.whenReady().then(() => {
   ipcMain.handle("app:get-settings", () => settings);
   ipcMain.handle("app:set-settings", (_e, patch: Partial<Settings>) => saveSettings(patch));
   ipcMain.handle("game:detect", () => detectGameDirectory());
-  ipcMain.handle("game:is-running", () => isGameRunning());
+  ipcMain.handle("game:is-running", async () => await isGameRunning());
   ipcMain.handle("window:minimize", () => { mainWindow?.minimize(); });
   ipcMain.handle("window:close", () => { mainWindow?.close(); });
   ipcMain.handle("window:confirm-close", async () => {
@@ -656,7 +676,7 @@ app.whenReady().then(() => {
   ipcMain.handle("mint:launch", async (_e, server: string) => {
     // Main-process mutex prevents rapid repeated clicks or forged IPC calls.
     if (launchInProgress) throw new Error("Запуск уже выполняется. Дождись завершения текущей операции.");
-    if (isGameRunning()) throw new Error("GTA V уже запущена. Повторный запуск заблокирован.");
+    if (await isGameRunning()) throw new Error("GTA V уже запущена. Повторный запуск заблокирован.");
     if (Date.now() < launchPendingUntil) throw new Error("Команда запуска уже отправлена. Подожди, пока GTA V откроется.");
     launchInProgress = true;
     try {
