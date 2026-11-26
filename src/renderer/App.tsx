@@ -29,7 +29,6 @@ export default function App() {
   const [serverStats, setServerStats] = useState<{ players: number | null; slots: number | null }>({ players: null, slots: null });
   const [error, setError] = useState("");
   const [trust, setTrust] = useState<any>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isBooting, setIsBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
@@ -257,7 +256,7 @@ export default function App() {
 
   async function saveSettings() {
     const saved = await window.launcher.setSettings(settings);
-    setSettings(saved); setShowSettings(false);
+    setSettings(saved);
     const status = await window.launcher.getMintStatus(); setMintStatus(status);
   }
 
@@ -276,7 +275,7 @@ export default function App() {
       {nav.map(({ label, title, icon: Icon }) => <button key={label} className={`nav-item ${activeTab === label ? "active" : ""}`} onClick={() => setActiveTab(label)}><Icon size={19}/>{title}{label === "Главная" && <i/>}</button>)}
       <button className="nav-item" onClick={() => openDiscordLink("community")}><MessageCircle size={19}/>Дискорд</button>
       <div className="sidebar-bottom">
-        <button className="nav-item" onClick={() => setShowSettings(true)}><Settings size={19}/>Настройки</button>
+        <button className={`nav-item ${activeTab === "Настройки" ? "active" : ""}`} onClick={() => setActiveTab("Настройки")}><Settings size={19}/>Настройки</button>
         <div className="profile-card">
           <div className="profile-card-top"><div className="profile-avatar">{(settings.playerName || "P").slice(0,1).toUpperCase()}</div><div className="profile-card-name"><b>{settings.playerName || "Player"}</b><small>Игровой профиль</small></div></div>
           <div className="profile-card-id">REMEMBER RP <span>•</span> ID не привязан</div>
@@ -387,6 +386,38 @@ export default function App() {
             <small>Ссылка на поддержку настраивается в параметрах лаунчера.</small>
           </aside>
         </div>
+      </section> : activeTab === "Настройки" ? <section className="settings-page">
+        <div className="inner-page-title"><div><span className="section-kicker">REMEMBER RP • CONFIGURATION</span><h1>НАСТРОЙКИ <em>ЛАУНЧЕРА</em></h1><p>Управляй игровыми параметрами, обновлениями и подключением.</p></div><div className="page-title-icon"><Settings size={35}/></div></div>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><span className="section-kicker">GAME CLIENT</span><h2>Игровые параметры</h2><p>Путь к игре и данные подключения к серверу.</p></div></div>
+          <label className="field-label">ПУТЬ К GTA V</label>
+          <div className="game-path-row"><input className="modal-input settings-input" value={settings.gameDirectory} onChange={e => setSettings({ ...settings, gameDirectory: e.target.value })} placeholder="Путь будет найден автоматически или укажи вручную"/><button className="secondary-small detect-game-btn" onClick={autoDetectGame} disabled={detectingGame}>{detectingGame ? "Поиск..." : "Найти GTA V"}</button></div>
+          {gameDetectMessage && <div className="detect-message">{gameDetectMessage}</div>}
+          <label className="field-label">АДРЕС ОСНОВНОГО СЕРВЕРА</label><input className="modal-input settings-input" value={settings.serverAddress || ""} onChange={e => { setSettings({ ...settings, serverAddress: e.target.value }); setServerAddress(e.target.value); }} placeholder="127.0.0.1:22005 — локальная заглушка"/>
+          <label className="field-label">ИГРОВОЕ ИМЯ</label><input className="modal-input settings-input" value={settings.playerName} onChange={e => setSettings({ ...settings, playerName: e.target.value })}/>
+        </section>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><span className="section-kicker">AUTO UPDATER</span><h2>Обновления</h2><p>Проверка и установка актуальной версии Remember RP.</p></div></div>
+          <div className="updater-settings-card">
+            <div className="updater-settings-head"><div className="updater-settings-icon"><RefreshCw size={17}/></div><div className="updater-settings-copy"><b>Умное обновление</b><small>Текущая версия: {updateInfo.currentVersion || "0.1.5"}</small></div><span className={`updater-state ${updateInfo.status === "up-to-date" || updateInfo.status === "downloaded" ? "ok" : ""}`}>{updateInfo.status === "available" ? "ДОСТУПНО" : updateInfo.status === "downloaded" ? "ГОТОВО" : updateInfo.status === "up-to-date" ? "АКТУАЛЬНО" : updateInfo.status === "not-configured" ? "ОТКЛЮЧЕНО" : updateInfo.status === "downloading" ? "ЗАГРУЗКА" : updateInfo.status === "cancelled" ? "ОСТАНОВЛЕНО" : updateInfo.status === "error" ? "ОШИБКА" : ""}</span></div>
+            <p className="updater-message">{updateInfo.message || "Обновления Remember RP через GitHub Releases."}</p>
+            {updateInfo.status === "downloading" && <><div className="updater-progress"><div style={{ width: `${Math.max(0, Math.min(100, updateInfo.percent || 0))}%` }}/></div><div className="updater-download-meta"><span>{updateInfo.percent || 0}%</span><span>{formatBytes(updateInfo.transferred)} / {formatBytes(updateInfo.total)}</span><b>{formatSpeed(updateInfo.bytesPerSecond)}</b></div></>}
+            <div className="updater-actions">
+              {updateInfo.status === "available" && <button className="primary-small" onClick={async () => { setUpdateBusy(true); try { await window.launcher.downloadUpdate(); } catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Не удалось загрузить обновление." }); } finally { setUpdateBusy(false); } }} disabled={updateBusy}><Download size={13}/> Скачать {updateInfo.version}</button>}
+              {updateInfo.status === "downloading" && <button className="secondary-small" onClick={stopUpdateDownload}><X size={13}/> Остановить загрузку</button>}
+              {(updateInfo.status === "cancelled" || updateInfo.status === "error") && <button className="primary-small" onClick={retryUpdateDownload} disabled={updateBusy}><RefreshCw size={13}/> Повторить загрузку</button>}
+              {updateInfo.status === "downloaded" && <button className="primary-small" onClick={() => window.launcher.installUpdate()}><CheckCircle2 size={13}/> Перезапустить и установить</button>}
+              <button className="secondary-small" onClick={checkUpdates} disabled={updateBusy || updateInfo.status === "downloading"}>{updateBusy || updateInfo.status === "checking" ? "Проверяем..." : "Проверить обновления"}</button>
+            </div>
+            <small className="updater-footnote">Используется дифференциальная загрузка блоков, если релиз содержит корректный blockmap. Скорость и прогресс обновляются в реальном времени.</small>
+          </div>
+        </section>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><span className="section-kicker">DISCORD COMMUNITY</span><h2>Ссылки сообщества</h2><p>Ссылки для перехода в Discord и обращения в поддержку.</p></div></div>
+          <label className="field-label">ССЫЛКА НА DISCORD-СООБЩЕСТВО</label><input className="modal-input settings-input" value={settings.discordInviteUrl || ""} onChange={e => setSettings({ ...settings, discordInviteUrl: e.target.value })} placeholder="https://discord.gg/..."/>
+          <label className="field-label">ССЫЛКА НА DISCORD-ПОДДЕРЖКУ</label><input className="modal-input settings-input" value={settings.discordSupportUrl || ""} onChange={e => setSettings({ ...settings, discordSupportUrl: e.target.value })} placeholder="https://discord.com/channels/..."/>
+        </section>
+        <div className="settings-savebar"><span>Не забудь сохранить изменения перед выходом.</span><button className="primary-small" onClick={saveSettings}>Сохранить настройки</button></div>
       </section> : <section className="placeholder-page"><div className="stat-icon"><CircleHelp size={24}/></div><span className="section-kicker">COMING SOON</span><h1>{activeTab}</h1><p>Раздел будет подключён на следующем этапе разработки.</p><button className="secondary-small" onClick={() => setActiveTab("Главная")}>Вернуться на главную</button></section>}
       <footer><span>© 2026 REMEMBER RP PROJECT</span><span>REMEMBER RP • OFFICIAL LAUNCHER</span></footer>
     </main>
@@ -426,41 +457,6 @@ export default function App() {
       <div className="boot-version">REMEMBER RP <b>•</b> OFFICIAL LAUNCHER</div>
     </div>}
     {trust && <div className="modal-backdrop"><div className="modal trust-modal"><div className="modal-head"><h2>Изменился ключ сервера</h2><button className="icon-btn" onClick={() => setTrust(null)}><X/></button></div><p>Игровой клиент сообщает, что ключ сервера изменился. Подтверждай только если доверяешь владельцу сервера.</p><div className="key-box"><small>СЕРВЕР</small><b>{trust.server}</b><small>ПРЕДЫДУЩИЙ КЛЮЧ</small><code>{trust.previousKey}</code><small>НОВЫЙ КЛЮЧ</small><code>{trust.candidateKey}</code></div><div className="modal-actions"><button className="secondary-small" onClick={async () => { await window.launcher.confirmTrust({ targetId: trust.id, requestId: trust.requestId, accepted: false }); setTrust(null); }}>Отклонить</button><button className="primary-small" onClick={async () => { await window.launcher.confirmTrust({ targetId: trust.id, requestId: trust.requestId, accepted: true }); setTrust(null); }}>Доверять этому ключу</button></div></div></div>}
-    {showSettings && <div className="modal-backdrop"><div className="modal"><div className="modal-head"><div><span className="section-kicker">CONFIGURATION</span><h2>Настройки лаунчера</h2></div><button className="icon-btn" onClick={() => setShowSettings(false)}><X/></button></div>
-      <div className="updater-settings-card">
-        <div className="updater-settings-head">
-          <div className="updater-settings-icon"><RefreshCw size={17}/></div>
-          <div className="updater-settings-copy"><b>Умное обновление</b><small>Текущая версия: {updateInfo.currentVersion || "0.1.5"}</small></div>
-          <span className={`updater-state ${updateInfo.status === "up-to-date" || updateInfo.status === "downloaded" ? "ok" : ""}`}>{updateInfo.status === "available" ? "ДОСТУПНО" : updateInfo.status === "downloaded" ? "ГОТОВО" : updateInfo.status === "up-to-date" ? "АКТУАЛЬНО" : updateInfo.status === "not-configured" ? "ОТКЛЮЧЕНО" : updateInfo.status === "downloading" ? "ЗАГРУЗКА" : updateInfo.status === "cancelled" ? "ОСТАНОВЛЕНО" : updateInfo.status === "error" ? "ОШИБКА" : ""}</span>
-        </div>
-        <p className="updater-message">{updateInfo.message || "Обновления Remember RP через GitHub Releases."}</p>
-        {updateInfo.status === "downloading" && <>
-          <div className="updater-progress"><div style={{ width: `${Math.max(0, Math.min(100, updateInfo.percent || 0))}%` }}/></div>
-          <div className="updater-download-meta"><span>{updateInfo.percent || 0}%</span><span>{formatBytes(updateInfo.transferred)} / {formatBytes(updateInfo.total)}</span><b>{formatSpeed(updateInfo.bytesPerSecond)}</b></div>
-        </>}
-        <div className="updater-actions">
-          {updateInfo.status === "available" ? <button className="primary-small" onClick={async () => { setUpdateBusy(true); try { await window.launcher.downloadUpdate(); } catch (e: any) { setUpdateInfo({ status: "error", message: e?.message || "Не удалось загрузить обновление." }); } finally { setUpdateBusy(false); } }} disabled={updateBusy}><Download size={13}/> Скачать {updateInfo.version}</button> : null}
-          {updateInfo.status === "downloading" ? <button className="secondary-small" onClick={stopUpdateDownload}><X size={13}/> Остановить загрузку</button> : null}
-          {(updateInfo.status === "cancelled" || updateInfo.status === "error") ? <button className="primary-small" onClick={retryUpdateDownload} disabled={updateBusy}><RefreshCw size={13}/> Повторить загрузку</button> : null}
-          {updateInfo.status === "downloaded" ? <button className="primary-small" onClick={() => window.launcher.installUpdate()}><CheckCircle2 size={13}/> Перезапустить и установить</button> : null}
-          <button className="secondary-small" onClick={checkUpdates} disabled={updateBusy || updateInfo.status === "downloading"}>{updateBusy || updateInfo.status === "checking" ? "Проверяем..." : "Проверить обновления"}</button>
-        </div>
-        <small className="updater-footnote">Используется дифференциальная загрузка блоков, если релиз содержит корректный blockmap. Скорость и прогресс обновляются в реальном времени.</small>
-      </div>
-      <label className="field-label">ПУТЬ К GTA V</label>
-      <div className="game-path-row">
-        <input className="modal-input" value={settings.gameDirectory} onChange={e => setSettings({ ...settings, gameDirectory: e.target.value })} placeholder="Путь будет найден автоматически или укажи вручную"/>
-        <button className="secondary-small detect-game-btn" onClick={autoDetectGame} disabled={detectingGame}>{detectingGame ? "Поиск..." : "Найти GTA V"}</button>
-      </div>
-      {gameDetectMessage && <div className="detect-message">{gameDetectMessage}</div>}
-      <label className="field-label">АДРЕС ОСНОВНОГО СЕРВЕРА</label><input className="modal-input" value={settings.serverAddress || ""} onChange={e => { setSettings({ ...settings, serverAddress: e.target.value }); setServerAddress(e.target.value); }} placeholder="127.0.0.1:22005 — локальная заглушка"/>
-      <label className="field-label">ИГРОВОЕ ИМЯ</label><input className="modal-input" value={settings.playerName} onChange={e => setSettings({ ...settings, playerName: e.target.value })}/>
-      <div className="settings-divider"><span className="section-kicker">DISCORD LINKS</span></div>
-      <label className="field-label">ССЫЛКА НА DISCORD-СООБЩЕСТВО</label>
-      <input className="modal-input" value={settings.discordInviteUrl || ""} onChange={e => setSettings({ ...settings, discordInviteUrl: e.target.value })} placeholder="https://discord.gg/..."/>
-      <label className="field-label">ССЫЛКА НА DISCORD-ПОДДЕРЖКУ</label>
-      <input className="modal-input" value={settings.discordSupportUrl || ""} onChange={e => setSettings({ ...settings, discordSupportUrl: e.target.value })} placeholder="https://discord.com/channels/..."/>
-      <div className="modal-actions"><button className="secondary-small" onClick={() => setShowSettings(false)}>Отмена</button><button className="primary-small" onClick={saveSettings}>Сохранить настройки</button></div>
-    </div></div>}
+
   </div>;
 }
