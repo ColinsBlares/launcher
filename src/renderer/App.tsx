@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ChevronRight, ChevronDown,
   CircleHelp, Gauge, Headphones, Monitor, Newspaper, Play, Users, UsersRound, Store, MessageSquare,
-  Settings, X, Zap, Minus, MessageCircle, BookOpen, Wrench, ShieldCheck, LifeBuoy, Download, RefreshCw, CheckCircle2
+  Settings, X, Zap, Minus, MessageCircle, BookOpen, Wrench, ShieldCheck, LifeBuoy, Download, RefreshCw, CheckCircle2, Lightbulb
 } from "lucide-react";
 
 type LogItem = { title: string; detail: string; time: string };
@@ -266,7 +266,8 @@ export default function App() {
     { label: "Магазин", title: "Магазин", icon: Store },
     { label: "Новости", title: "Новости", icon: Newspaper },
     { label: "Форум", title: "Форум", icon: MessageSquare },
-    { label: "Wiki", title: "Wiki", icon: BookOpen }
+    { label: "Wiki", title: "Wiki", icon: BookOpen },
+    { label: "Поддержка", title: "Поддержка", icon: LifeBuoy }
   ];
   return <div className="app-shell">
     <aside className="sidebar">
@@ -319,7 +320,34 @@ export default function App() {
             <div className="screenshot-discord-card"><MessageCircle size={19}/><div><b>Наше сообщество</b><small>Общайся с игроками в Discord</small></div><button onClick={() => openDiscordLink("community")}><ChevronRight size={17}/></button></div>
           </aside>
         </div>
-      </> : activeTab === "Поддержка" ? <section className="support-page">
+            </> : activeTab === "Магазин" ? <section className="inner-page">
+        <div className="inner-page-hero shop-page-hero">
+          <div className="inner-page-hero-copy"><span className="section-kicker">REMEMBER RP • STORE</span><h1>МАГАЗИН <em>ПРОЕКТА</em></h1><p>Всё для твоей истории в Remember RP. Каталог и покупки появятся здесь после открытия магазина.</p><span className="page-status"><span/> МАГАЗИН ГОТОВИТСЯ К ОТКРЫТИЮ</span></div>
+          <div className="inner-page-hero-art"><Store size={74}/><div className="hero-art-ring"/></div>
+        </div>
+        <div className="inner-page-heading"><div><span className="section-kicker">STORE CATEGORIES</span><h2>Категории магазина</h2></div><span className="page-muted">СКОРО В REMEMBER RP</span></div>
+        <div className="feature-card-grid three">
+          <article className="feature-card"><div className="feature-card-icon"><Zap size={22}/></div><span className="feature-card-tag">01 / ПРЕМИУМ</span><h3>Премиум-статусы</h3><p>Дополнительные возможности и привилегии на сервере.</p><span className="feature-card-soon">СКОРО</span></article>
+          <article className="feature-card"><div className="feature-card-icon"><UsersRound size={22}/></div><span className="feature-card-tag">02 / ПЕРСОНАЖ</span><h3>Персонализация</h3><p>Настрой внешний вид и детали своего игрового образа.</p><span className="feature-card-soon">СКОРО</span></article>
+          <article className="feature-card"><div className="feature-card-icon"><ShieldCheck size={22}/></div><span className="feature-card-tag">03 / БОНУСЫ</span><h3>Наборы и бонусы</h3><p>Полезные наборы для комфортного старта в городе.</p><span className="feature-card-soon">СКОРО</span></article>
+        </div>
+        <div className="page-bottom-banner"><div><b>Следи за запуском магазина</b><p>Объявим об открытии в новостях Remember RP.</p></div><button className="secondary-small" onClick={() => setActiveTab("Новости")}>К новостям <ChevronRight size={15}/></button></div>
+      </section> : activeTab === "Новости" ? <section className="inner-page">
+        <div className="inner-page-title"><div><span className="section-kicker">REMEMBER RP • NEWSROOM</span><h1>НОВОСТИ <em>ПРОЕКТА</em></h1><p>Последние события и заметки о разработке Remember RP.</p></div><div className="page-title-icon"><Newspaper size={35}/></div></div>
+        <div className="news-feature-grid">
+          <article className="news-feature-card news-feature-main"><div className="news-feature-image news-car"/><div className="news-feature-overlay"/><div className="news-feature-copy"><span className="feature-card-tag">РАЗРАБОТКА • REMEMBER RP</span><h2>Развитие Remember RP</h2><p>Мы продолжаем работу над игровым миром, системами и возможностями проекта.</p><span className="news-read-label">НОВОСТЬ ПРОЕКТА <ChevronRight size={15}/></span></div></article>
+          <article className="news-feature-card"><div className="news-feature-image news-city"/><div className="news-feature-overlay"/><div className="news-feature-copy"><span className="feature-card-tag">МИР • ЛОС-САНТОС</span><h2>Здесь начнётся твоя история</h2><p>Создаём место, в котором каждый игрок сможет написать собственную историю.</p><span className="news-read-label">НОВОСТЬ ПРОЕКТА <ChevronRight size={15}/></span></div></article>
+        </div>
+        <div className="inner-page-heading"><div><span className="section-kicker">UPDATES</span><h2>Дневник разработки</h2></div><span className="page-muted">REMEMBER RP</span></div>
+        <div className="timeline-list"><div className="timeline-item"><span className="timeline-dot"/><div><b>Обновление лаунчера</b><p>Новый интерфейс, улучшенная навигация и подготовка к дальнейшим обновлениям.</p></div><span className="timeline-label">LAUNCHER</span></div><div className="timeline-item"><span className="timeline-dot"/><div><b>Работа над игровым миром</b><p>Продолжаем собирать системы и наполнять проект контентом.</p></div><span className="timeline-label">DEVELOPMENT</span></div></div>
+      </section> : activeTab === "Форум" ? <section className="inner-page">
+        <div className="inner-page-hero forum-page-hero"><div className="inner-page-hero-copy"><span className="section-kicker">REMEMBER RP • COMMUNITY</span><h1>СООБЩЕСТВО <em>ИГРОКОВ</em></h1><p>Обсуждай обновления, делись идеями и находи единомышленников. Общение с командой и игроками — в нашем Discord.</p><button className="page-primary-action" onClick={() => openDiscordLink("community")}><MessageCircle size={16}/> Перейти в сообщество <ChevronRight size={16}/></button></div><div className="inner-page-hero-art"><MessageSquare size={76}/><div className="hero-art-ring"/></div></div>
+        <div className="inner-page-heading"><div><span className="section-kicker">COMMUNITY SPACE</span><h2>Разделы сообщества</h2></div><span className="page-muted">ОБЩАЙСЯ • ПРЕДЛАГАЙ • УЧАСТВУЙ</span></div>
+        <div className="feature-card-grid three"><article className="feature-card"><div className="feature-card-icon"><MessageCircle size={22}/></div><span className="feature-card-tag">01 / DISCUSSION</span><h3>Обсуждения</h3><p>Общайся с игроками и обсуждай последние события.</p><button className="feature-card-link" onClick={() => openDiscordLink("community")}>Открыть Discord <ChevronRight size={14}/></button></article><article className="feature-card"><div className="feature-card-icon"><Lightbulb size={22}/></div><span className="feature-card-tag">02 / IDEAS</span><h3>Предложения</h3><p>Делись идеями и помогай развивать Remember RP.</p><button className="feature-card-link" onClick={() => openDiscordLink("community")}>Предложить идею <ChevronRight size={14}/></button></article><article className="feature-card"><div className="feature-card-icon"><Users size={22}/></div><span className="feature-card-tag">03 / COMMUNITY</span><h3>Игроки</h3><p>Знакомься с участниками сообщества и собирай команду.</p><button className="feature-card-link" onClick={() => openDiscordLink("community")}>Найти игроков <ChevronRight size={14}/></button></article></div>
+      </section> : activeTab === "Wiki" ? <section className="inner-page">
+        <div className="inner-page-title"><div><span className="section-kicker">REMEMBER RP • KNOWLEDGE BASE</span><h1>БАЗА <em>ЗНАНИЙ</em></h1><p>Краткие инструкции, которые помогут подготовиться к игре.</p></div><div className="page-title-icon"><BookOpen size={35}/></div></div>
+        <div className="wiki-feature-grid"><article className="wiki-feature-card"><div className="feature-card-icon"><Download size={22}/></div><span className="feature-card-tag">01 / GET STARTED</span><h3>Установка и запуск</h3><p>Как установить лаунчер, указать папку GTA V и запустить клиент.</p><button className="feature-card-link" onClick={() => setActiveTab("Поддержка")}>Инструкция <ChevronRight size={14}/></button></article><article className="wiki-feature-card"><div className="feature-card-icon"><UsersRound size={22}/></div><span className="feature-card-tag">02 / FIRST STEPS</span><h3>Первый вход</h3><p>Подготовка к первому подключению и знакомство с проектом.</p><span className="feature-card-soon">СКОРО</span></article><article className="wiki-feature-card"><div className="feature-card-icon"><ShieldCheck size={22}/></div><span className="feature-card-tag">03 / RULES</span><h3>Правила проекта</h3><p>Основные принципы комфортной игры и общения.</p><span className="feature-card-soon">СКОРО</span></article><article className="wiki-feature-card"><div className="feature-card-icon"><CircleHelp size={22}/></div><span className="feature-card-tag">04 / HELP</span><h3>Решение проблем</h3><p>Ответы на частые вопросы о лаунчере и клиенте.</p><button className="feature-card-link" onClick={() => setActiveTab("Поддержка")}>Центр поддержки <ChevronRight size={14}/></button></article></div>
+      </section> : activeTab === "Поддержка" ? <section className="support-page">
         <div className="support-hero">
           <div className="support-hero-copy">
             <span className="section-kicker">REMEMBER RP • HELP CENTER</span>
